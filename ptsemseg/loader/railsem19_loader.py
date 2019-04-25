@@ -9,16 +9,14 @@ from ptsemseg.utils import recursive_glob
 from ptsemseg.augmentations import Compose, RandomHorizontallyFlip, RandomRotate, Scale
 
 
-class cityscapesLoader(data.Dataset):
-    """cityscapesLoader
+class railsem19Loader(data.Dataset):
+    """railsem19Loader
 
-    https://www.cityscapes-dataset.com
+    RailSem19 Dataset
 
-    Data is derived from CityScapes, and can be downloaded from here:
-    https://www.cityscapes-dataset.com/downloads/
+    Data can be downloaded from here:
+    http://wilddash.cc/railsem19
 
-    Many Thanks to @fvisin for the loader repo:
-    https://github.com/fvisin/dataset_loaders/blob/master/dataset_loaders/images/cityscapes.py
     """
 
     colors = [  # [  0,   0,   0],
@@ -48,6 +46,7 @@ class cityscapesLoader(data.Dataset):
     mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
+	"railsem19": [0.0, 0.0, 0.0],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
     def __init__(
@@ -58,7 +57,7 @@ class cityscapesLoader(data.Dataset):
         img_size=(512, 1024),
         augmentations=None,
         img_norm=True,
-        version="cityscapes",
+        version="railsem19",
         test_mode=False,
     ):
         """__init__
@@ -70,7 +69,7 @@ class cityscapesLoader(data.Dataset):
         :param augmentations
         """
         if root is None:
-            root = "/workspace/data/experiment2_railseg19"
+            root = os.path.expandvars('$RAILSEM19_DATASET')
         self.root = root
         self.split = split
         self.is_transform = is_transform
@@ -87,9 +86,9 @@ class cityscapesLoader(data.Dataset):
         self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
         if len(self.files[split]) == 0:
             self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
-            self.void_classes = [19,20,253,254,255]
-            self.valid_classes = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
-            self.class_names = [
+        self.void_classes = [19,20,253,254,255]
+        self.valid_classes = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
+        self.class_names = [
             "unlabelled",
             "road",
             "sidewalk",
@@ -108,53 +107,8 @@ class cityscapesLoader(data.Dataset):
             "truck",
             "trackbed",
             "on-rails",
-            "rail",
-            "rail-drivable"]
-        else:
-            self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
-            self.valid_classes = [
-            7,
-            8,
-            11,
-            12,
-            13,
-            17,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            31,
-            32,
-            33,
-        ]
-            self.class_names = [
-            "unlabelled",
-            "road",
-            "sidewalk",
-            "building",
-            "wall",
-            "fence",
-            "pole",
-            "traffic_light",
-            "traffic_sign",
-            "vegetation",
-            "terrain",
-            "sky",
-            "person",
-            "rider",
-            "car",
-            "truck",
-            "bus",
-            "train",
-            "motorcycle",
-            "bicycle",
-        ]
+            "rail-raised",
+            "rail-embedded",]
 
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
