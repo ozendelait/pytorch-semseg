@@ -144,7 +144,7 @@ class frrn(nn.Module):
         for n_blocks, channels, scale in self.decoder_frru_specs:
             # bilinear upsample smaller feature map
             upsample_size = torch.Size([_s * 2 for _s in y.size()[-2:]])
-            y_upsampled = F.upsample(y, size=upsample_size, mode="bilinear", align_corners=True)
+            y_upsampled = F.interpolate(y, size=upsample_size, mode="bilinear", align_corners=True)
             # pass through decoding FRRUs
             for block in range(n_blocks):
                 key = "_".join(map(str, ["decoding_frru", n_blocks, channels, scale, block]))
@@ -154,9 +154,8 @@ class frrn(nn.Module):
             prev_channels = channels
 
         # merge streams
-        x = torch.cat(
-            [F.upsample(y, scale_factor=2, mode="bilinear", align_corners=True), z], dim=1
-        )
+        xUp = F.interpolate(y, size=torch.Size([z.shape[2],z.shape[3]]), mode="bilinear", align_corners=True)
+        x = torch.cat([xUp, z], dim=1)
         x = self.merge_conv(x)
 
         # pass through residual units
