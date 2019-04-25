@@ -1,4 +1,4 @@
-import yaml
+import yaml, sys
 import torch
 import argparse
 import timeit
@@ -83,9 +83,10 @@ def validate(cfg, args):
 
     for i in range(n_classes):
         print(i, class_iou[i])
+    return score, class_iou
 
 
-if __name__ == "__main__":
+def main_val(argv=sys.argv[1:]):
     parser = argparse.ArgumentParser(description="Hyperparams")
     parser.add_argument(
         "--config",
@@ -133,9 +134,12 @@ if __name__ == "__main__":
     )
     parser.set_defaults(measure_time=True)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     with open(args.config) as fp:
         cfg = yaml.load(fp)
 
-    validate(cfg, args)
+    return validate(cfg, args)
+
+if __name__ == "__main__":
+    main_val()

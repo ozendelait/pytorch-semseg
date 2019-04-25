@@ -1,4 +1,4 @@
-import os
+import os,sys,math
 import yaml
 import time
 import shutil
@@ -8,7 +8,7 @@ import argparse
 import numpy as np
 
 from torch.utils import data
-from tqdm import tqdm
+from tqdm import tqdm_notebook as tqdm
 
 from ptsemseg.models import get_model
 from ptsemseg.loss import get_loss_function
@@ -57,12 +57,6 @@ def train(cfg, writer, logger):
     )
 
     n_classes = t_loader.n_classes
-    trainloader = data.DataLoader(
-        t_loader,
-        batch_size=cfg["training"]["batch_size"],
-        num_workers=cfg["training"]["n_workers"],
-        shuffle=True,
-    )
 
     valloader = data.DataLoader(
         v_loader, batch_size=cfg["training"]["batch_size"], num_workers=cfg["training"]["n_workers"]
@@ -73,7 +67,8 @@ def train(cfg, writer, logger):
 
     # Setup Model
     model = get_model(cfg["model"], n_classes).to(device)
-
+    for param in model.parameters():
+        param.requires_grad = True
     model = torch.nn.DataParallel(model, device_ids=range(torch.cuda.device_count()))
 
     # Setup optimizer, lr_scheduler and loss function
@@ -96,12 +91,13 @@ def train(cfg, writer, logger):
             )
             checkpoint = torch.load(cfg["training"]["resume"])
             model.load_state_dict(checkpoint["model_state"])
-            optimizer.load_state_dict(checkpoint["optimizer_state"])
-            scheduler.load_state_dict(checkpoint["scheduler_state"])
-            start_iter = checkpoint["epoch"]
+            if "optimizer_state" in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state"])
+                scheduler.load_state_dict(checkpoint["scheduler_state"])
+                start_iter = checkpoint["epoch"]
             logger.info(
                 "Loaded checkpoint '{}' (iter {})".format(
-                    cfg["training"]["resume"], checkpoint["epoch"]
+                    cfg["training"]["resume"], start_iter
                 )
             )
         else:
@@ -113,9 +109,27 @@ def train(cfg, writer, logger):
     best_iou = -100.0
     i = start_iter
     flag = True
+    max_iters = cfg["training"]["train_iters"]
+    while i <= max_iters and flag:
+        #reshuffle training set with each epoch
+        trainloader = data.DataLoader(
+           t_loader,
+           batch_size=cfg["training"]["batch_size"],
+           num_workers=cfg["training"]["n_workers"],
+           shuffle=True,
+        )
 
-    while i <= cfg["training"]["train_iters"] and flag:
-        for (images, labels) in trainloader:
+        num_elems = len(trainloader)
+        training_iters = cfg["training"]["val_interval"]
+        if abs(num_elems-training_iters) < 25:
+            training_iters = num_elems
+        i += int(math.ceil(float(i)/float(training_iters))-i) # get to next epoch start
+        printing_iters = cfg["training"]["print_interval"]
+        if abs(printing_iters-training_iters) < 25:
+            printing_iters = training_iters
+
+        t_max, i_start = len(trainloader), i
+        for (images, labels) in tqdm(trainloader, desc = 'Training Epoch %i; mIouMax: %f'%(int(i//training_iters),best_iou)):
             i += 1
             start_ts = time.time()
             scheduler.step()
@@ -133,7 +147,7 @@ def train(cfg, writer, logger):
 
             time_meter.update(time.time() - start_ts)
 
-            if (i + 1) % cfg["training"]["print_interval"] == 0:
+            if (i + 1) % printing_iters == 0:
                 fmt_str = "Iter [{:d}/{:d}]  Loss: {:.4f}  Time/Image: {:.4f}"
                 print_str = fmt_str.format(
                     i + 1,
@@ -147,12 +161,10 @@ def train(cfg, writer, logger):
                 writer.add_scalar("loss/train_loss", loss.item(), i + 1)
                 time_meter.reset()
 
-            if (i + 1) % cfg["training"]["val_interval"] == 0 or (i + 1) == cfg["training"][
-                "train_iters"
-            ]:
+            if i  % training_iters == 0 or (i + 1) == max_iters:
                 model.eval()
                 with torch.no_grad():
-                    for i_val, (images_val, labels_val) in tqdm(enumerate(valloader)):
+                    for i_val, (images_val, labels_val) in tqdm(enumerate(valloader), desc = "Validation"):
                         images_val = images_val.to(device)
                         labels_val = labels_val.to(device)
 
@@ -196,12 +208,15 @@ def train(cfg, writer, logger):
                     )
                     torch.save(state, save_path)
 
-            if (i + 1) == cfg["training"]["train_iters"]:
+            if (i + 1) == max_iters:
                 flag = False
                 break
 
 
 if __name__ == "__main__":
+    sys.exit(main_tr())
+
+def main_tr(argv=sys.argv[1:]):
     parser = argparse.ArgumentParser(description="config")
     parser.add_argument(
         "--config",
@@ -211,13 +226,13 @@ if __name__ == "__main__":
         help="Configuration file to use",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     with open(args.config) as fp:
         cfg = yaml.load(fp)
 
     run_id = random.randint(1, 100000)
-    logdir = os.path.join("runs", os.path.basename(args.config)[:-4], str(run_id))
+    logdir = os.path.join("/workspace/data/pytsegmruns", os.path.basename(args.config)[:-4], str(run_id))
     writer = SummaryWriter(log_dir=logdir)
 
     print("RUNDIR: {}".format(logdir))
