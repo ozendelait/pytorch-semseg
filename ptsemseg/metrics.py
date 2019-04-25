@@ -18,6 +18,14 @@ class runningScore(object):
 
     def update(self, label_trues, label_preds):
         for lt, lp in zip(label_trues, label_preds):
+            if lp.shape[0] != lt.shape[0] or lp.shape[1] != lp.shape[1]:
+                pl = []
+                for i,d in enumerate(lt.shape):
+                    p0 = d-lp.shape[i]
+                    p1 = int(p0/2)
+                    pl += [p1, p0-p1]
+                lp0 = np.pad(lp,[(pl[0],pl[1]),(pl[2],pl[3])],mode='constant')
+                lp = lp0
             self.confusion_matrix += self._fast_hist(lt.flatten(), lp.flatten(), self.n_classes)
 
     def get_scores(self):
