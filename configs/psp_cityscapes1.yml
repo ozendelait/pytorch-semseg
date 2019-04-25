@@ -1,0 +1,37 @@
+model:
+    arch: pspnet
+data:
+    dataset: cityscapes
+    version: pascal
+    train_split: train
+    val_split: val
+    img_rows: 512
+    img_cols: 512
+    path: /workspace/data/cityscapes/
+training:
+    train_iters: 7500
+    batch_size: 4
+    n_workers: 1
+    val_interval: 750
+    print_interval: 750
+    optimizer:
+        name: adam
+        lr: 1.0e-3
+    augmentations:
+        brightness: 1.5                             
+        saturation: 1.5                                
+        contrast: 1.5 
+        rotate: 10                                                                        
+        vflip: 0.5 
+
+    l_rate: 1.0e-3
+    lr_schedule: 
+        name: cosine_annealing
+        T_max: 500
+    momentum: 0.99
+    weight_decay: 0.0005
+    resume: /workspace/data/bestmodel/pspnet_101_cityscapes.pth
+    visdom: False
+    loss:
+        name: 'multi_scale_cross_entropy'
+        size_average: True
