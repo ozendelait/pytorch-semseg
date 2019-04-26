@@ -46,6 +46,8 @@ def train(cfg, writer, logger):
         is_transform=True,
         split=cfg["data"]["train_split"],
         img_size=(cfg["data"]["img_rows"], cfg["data"]["img_cols"]),
+        version=cfg["data"].get("version","cityscapes"),
+        img_norm=cfg["data"].get("img_norm",True),
         augmentations=data_aug,
     )
 
@@ -54,6 +56,8 @@ def train(cfg, writer, logger):
         is_transform=True,
         split=cfg["data"]["val_split"],
         img_size=(cfg["data"]["img_rows"], cfg["data"]["img_cols"]),
+        version=cfg["data"].get("version","cityscapes"),
+	img_norm=cfg["data"].get("img_norm",True),
     )
 
     n_classes = t_loader.n_classes
@@ -207,6 +211,7 @@ def train(cfg, writer, logger):
                         "{}_{}_best_model.pkl".format(cfg["model"]["arch"], cfg["data"]["dataset"]),
                     )
                     torch.save(state, save_path)
+                break
 
             if (i + 1) == max_iters:
                 flag = False
