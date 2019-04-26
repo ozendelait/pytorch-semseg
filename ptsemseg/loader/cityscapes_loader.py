@@ -69,6 +69,7 @@ class cityscapesLoader(data.Dataset):
         :param img_size:
         :param augmentations
         """
+
         if root is None:
             root = os.path.expandvars('$CITYSCAPES_DATASET')
         self.root = root
