@@ -30,7 +30,7 @@ training:
         T_max: 500
     momentum: 0.99
     weight_decay: 0.0005
-    resume: /workspace/data/bestmodel/psp_cs_iou55.pkl
+    resume: /workspace/data/bestmodel/psp_cs_iou57.pkl
     visdom: False
     loss:
         name: 'multi_scale_cross_entropy'

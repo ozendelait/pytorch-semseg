@@ -31,8 +31,8 @@ training:
         T_max: 500
     momentum: 0.99
     weight_decay: 0.0005
-    resume: /workspace/data/bestmodel/icnet_cityscapes_trainval_90k.pth
+    resume: None
     visdom: False
     loss:
         name: 'cross_entropy'
-        size_average: True
+        size_average: False

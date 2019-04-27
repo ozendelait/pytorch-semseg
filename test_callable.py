@@ -51,7 +51,8 @@ def test(args):
     img = misc.imread(allfiles[0])
     orig_size = img.shape[:-1]
     data_loader = get_loader(args.dataset)
-    loader = data_loader(root=None, is_transform=True, img_norm=args.img_norm, test_mode=True)
+    loader = data_loader(root=None, is_transform=True, version=args.version, img_norm=args.img_norm, test_mode=True)
+   
     n_classes = loader.n_classes
   
     # Setup Model
@@ -110,6 +111,12 @@ def main_test(arg0):
         help="Dataset to use ['pascal, camvid, ade20k etc']",
     )
 
+    parser.add_argument(
+        "--version",
+        type=str,
+        default="cityscapes",
+        help="Image normalization to use ['pascal, cityscapes']",
+    )
     parser.add_argument(
         "--img_norm",
         dest="img_norm",

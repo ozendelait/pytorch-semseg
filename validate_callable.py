@@ -28,6 +28,8 @@ def validate(cfg, args):
         split=cfg["data"]["val_split"],
         is_transform=True,
         img_size=(cfg["data"]["img_rows"], cfg["data"]["img_cols"]),
+ 	version=cfg["data"].get("version","cityscapes"),
+        img_norm=cfg["data"].get("img_norm",True),
     )
 
     n_classes = loader.n_classes
