@@ -753,14 +753,14 @@ class cascadeFeatureFusion(nn.Module):
         )
 
     def forward(self, x_low, x_high):
+        high_fm = self.high_proj_conv_bn(x_high)
         x_low_upsampled = F.interpolate(
-            x_low, size=get_interp_size(x_low, z_factor=2), mode="bilinear", align_corners=True
+            x_low, size=(high_fm.shape[2],high_fm.shape[3]), mode="bilinear", align_corners=True
         )
 
         low_cls = self.low_classifier_conv(x_low_upsampled)
-
         low_fm = self.low_dilated_conv_bn(x_low_upsampled)
-        high_fm = self.high_proj_conv_bn(x_high)
+        
         high_fused_fm = F.relu(low_fm + high_fm, inplace=True)
 
         return high_fused_fm, low_cls
