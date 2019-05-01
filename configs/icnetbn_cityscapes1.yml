@@ -11,13 +11,14 @@ data:
     path: /workspace/data/cityscapes/
 training:
     train_iters: 7500
-    batch_size: 6
+    batch_size: 4
     n_workers: 1
-    val_interval: 496
-    print_interval: 496
+    val_interval: 744
+    print_interval: 744
     optimizer:
         name: adam
-        lr: 2.0e-3
+        lr: 5.0e-5
+        weight_decay: 0.0005
     augmentations:
         rcrop: [1024, 1820]
         saturation: 0.25
@@ -25,7 +26,7 @@ training:
         contrast: 0.125
         vflip: 0.5
 
-    l_rate: 2.0e-3
+    l_rate: 5.0e-5
     lr_schedule: 
         name: cosine_annealing
         T_max: 500
@@ -34,5 +35,5 @@ training:
     resume: /workspace/data/bestmodel/icnetbn_cs_iou50.pkl
     visdom: False
     loss:
-        name: 'cross_entropy'
+        name: multi_scale_cross_entropy
         size_average: False
