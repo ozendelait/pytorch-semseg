@@ -542,7 +542,7 @@ class pyramidPooling(nn.Module):
     def forward(self, x):
         h, w = x.shape[2:]
 
-        if self.training or self.model_name != "icnet":  # general settings or pspnet
+        if self.training or len(self.model_name) < 5 or self.model_name[:5] != "icnet":  # general settings or pspnet
             k_sizes = []
             strides = []
             for pool_size in self.pool_sizes:

@@ -37,6 +37,9 @@ def get_model(model_dict, n_classes, version=None):
 
     elif name == "icnet":
         model = model(n_classes=n_classes, **param_dict)
+    
+    elif name == "icnetNonBN":
+        model = model(n_classes=n_classes, is_batchnorm=False, **param_dict)
 
     elif name == "icnetBN":
         model = model(n_classes=n_classes, **param_dict)
@@ -58,6 +61,7 @@ def _get_model_instance(name):
             "pspnet": pspnet,
             "icnet": icnet,
             "icnetBN": icnet,
+            "icnetNonBN": icnet,
             "linknet": linknet,
             "frrnA": frrn,
             "frrnB": frrn,
