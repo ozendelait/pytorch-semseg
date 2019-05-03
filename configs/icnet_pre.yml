@@ -1,0 +1,31 @@
+model:
+    arch: icnetNonBN
+data:
+    dataset: cityscapes
+    version: pascal
+    img_norm: False
+    train_split: train
+    val_split: val
+    img_rows: 1025
+    img_cols: 2049
+    path: /workspace/data/cityscapes/
+training:
+    train_iters: 7500
+    batch_size: 1
+    n_workers: 1
+    val_interval: 2948
+    print_interval: 2948
+    optimizer:
+        name: adam
+        lr: 1.0e-4
+    l_rate: 1.0e-4
+    lr_schedule: 
+        name: cosine_annealing
+        T_max: 500
+    momentum: 0.99
+    weight_decay: 0.0005
+    resume: /workspace/data/bestmodel/icnet_cityscapes_trainval_90k.pth
+    visdom: False
+    loss:
+        name: 'cross_entropy'
+        size_average: False
