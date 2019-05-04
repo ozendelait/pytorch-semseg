@@ -135,6 +135,7 @@ def train(cfg, writer, logger):
         t_max, i_start = len(trainloader), i
         for (images, labels) in tqdm(trainloader, desc = 'Training Epoch %i; mIouMax: %f'%(int(i//training_iters),best_iou)):
             i += 1
+ 
             start_ts = time.time()
             scheduler.step()
             model.train()
