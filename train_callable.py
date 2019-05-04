@@ -128,8 +128,8 @@ def train(cfg, writer, logger):
         if abs(num_elems-training_iters) < 25:
             training_iters = num_elems
         i += int(math.ceil(float(i)/float(training_iters))-i) # get to next epoch start
-        printing_iters = cfg["training"]["print_interval"]
-        if abs(printing_iters-training_iters) < 25:
+        printing_iters = cfg["training"].get("print_interval",cfg["training"]["val_interval"])
+        if abs(cfg["training"]["val_interval"]-cfg["training"]["print_interval"]) < 25:
             printing_iters = training_iters
 
         t_max, i_start = len(trainloader), i
@@ -166,7 +166,7 @@ def train(cfg, writer, logger):
                 writer.add_scalar("loss/train_loss", loss.item(), i + 1)
                 time_meter.reset()
 
-            if i  % training_iters == 0 or (i + 1) == max_iters:
+            if i  % training_iters == 0 or (i + 1 - i_start) == t_max:
                 model.eval()
                 with torch.no_grad():
                     for i_val, (images_val, labels_val) in tqdm(enumerate(valloader), desc = "Validation"):
