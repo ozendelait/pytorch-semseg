@@ -19,12 +19,14 @@ class mapillaryVistasLoader(data.Dataset):
         is_transform=True,
         augmentations=None,
         test_mode=False,
+        version='cityscapes',
+        img_norm=False
     ):
         self.root = root
         self.split = split
         self.is_transform = is_transform
         self.augmentations = augmentations
-        self.n_classes = 65
+        self.n_classes = 65      
 
         self.img_size = img_size if isinstance(img_size, tuple) else (img_size, img_size)
         self.mean = np.array([80.5423, 91.3162, 81.4312])
@@ -38,7 +40,30 @@ class mapillaryVistasLoader(data.Dataset):
         self.class_ids, self.class_names, self.class_colors = self.parse_config()
 
         self.ignore_id = 250
-
+        self.lut = None
+        if version == 'cityscapes':
+            map_to_cs = [250, 250,   1,   4,   4,   2,   3, 250,   1,   1,   0,   1, 250,
+         0,   0,   1,   2,   2,   2,  11,  12,  12,  12,   0, 250,   8,
+         9,  10,   9,   9,   8,   9,   2,   2,   2,   2, 250,   2,   5,
+         2, 250, 250,   2, 250,   5,   5,   5,   5,   6,   5,   7,   2,
+        18, 250,  14,  13,  14,  17,  16,  14,  14,  14,  11, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
+        250, 250, 250, 250, 250, 250, 250, 250, 250]
+            self.lut = np.array(map_to_cs).astype(np.uint8)
+            self.n_classes = 19
         if not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
@@ -73,22 +98,25 @@ class mapillaryVistasLoader(data.Dataset):
         lbl_path = os.path.join(
             self.annotations_base, os.path.basename(img_path).replace(".jpg", ".png")
         )
-
+        
         img = Image.open(img_path)
         lbl = Image.open(lbl_path)
-
+        #print("INFO sz0", img_path, img.size, lbl.size, self.img_size)
         if self.augmentations is not None:
             img, lbl = self.augmentations(img, lbl)
 
         if self.is_transform:
             img, lbl = self.transform(img, lbl)
-
+        if not self.lut is None:
+            lbl = torch.from_numpy(np.take(self.lut, lbl)).long()
+        #print("INFO sz1", self.is_transform, img_path, img.size, lbl.size, self.img_size)
         return img, lbl
 
     def transform(self, img, lbl):
         if self.img_size == ("same", "same"):
             pass
         else:
+            #trg_h_sc = self.img_size[1]
             img = img.resize(
                 (self.img_size[0], self.img_size[1]), resample=Image.LANCZOS
             )  # uint8 with RGB mode

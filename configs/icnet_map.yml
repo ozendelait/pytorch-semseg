@@ -1,14 +1,14 @@
 model:
     arch: icnetNonBN
 data:
-    dataset: railsem19
-    version: pascal
+    dataset: vistas
+    version: cityscapes
     img_norm: False
     train_split: train
     val_split: val
     img_rows: 1025
     img_cols: 2049
-    path: /workspace/data/experiment2_railseg19
+    path: /workspace/data/mapillary
 training:
     train_iters: 7500
     batch_size: 1
@@ -29,7 +29,7 @@ training:
         T_max: 500
     momentum: 0.99
     weight_decay: 0.0005
-    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou57.pkl
+    resume: /workspace/data/bestmodel/icnet_cityscapes_trainval_90k.pth
     visdom: False
     loss:
         name: cross_entropy

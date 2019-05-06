@@ -51,7 +51,7 @@ class icnet(nn.Module):
         )
         self.n_classes = icnet_specs[version]["n_classes"] if version is not None else n_classes
         self.input_size = icnet_specs[version]["input_size"] if version is not None else input_size
-
+        print("ICNETINFO: ",self.input_size, n_classes, block_config, version)
         # Encoder
         self.convbnrelu1_1 = conv2DBatchNormRelu(
             in_channels=3,

@@ -18,7 +18,7 @@ def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
 
 def prepare_img(img, orig_size, model_name, loader, img_norm):
     resized_img = misc.imresize(img, (loader.img_size[0], loader.img_size[1]), interp="bicubic")
-    if model_name in ["pspnet", "icnet", "icnetBN"]:
+    if model_name[:min(5,len(model_name))] in ["pspne", "icnet"]:
         # uint8 with RGB mode, resize width and height which are odd numbers
         img = misc.imresize(img, (orig_size[0] // 2 * 2 + 1, orig_size[1] // 2 * 2 + 1))
     else:
@@ -82,7 +82,7 @@ def test(args):
             images = img.to(device)
             outputs = model(images)
             pred = np.squeeze(outputs.data.max(1)[1].cpu().numpy(), axis=0)
-            if model_name in ["pspnet", "icnet", "icnetBN"]:
+            if model_name[:min(5,len(model_name))] in ["pspne", "icnet"]:
                 pred = pred.astype(np.float32)
                 # float32 with F mode, resize back to orig_size
                 pred = misc.imresize(pred, orig_size, "nearest", mode="F")

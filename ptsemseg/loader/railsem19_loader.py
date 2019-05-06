@@ -86,6 +86,7 @@ class railsem19Loader(data.Dataset):
         self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
         if len(self.files[split]) == 0:
             self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
+        print("INFO FOUND IMGS", split, len(self.files[split]), self.images_base)
         self.void_classes = [19,20,253,254,255]
         self.valid_classes = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
         self.class_names = [

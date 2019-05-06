@@ -34,8 +34,14 @@ def multi_scale_cross_entropy2d(input, target, weight=None, size_average=True, s
 
     loss = 0.0
     for i, inp in enumerate(input):
+        target_scaled = target
+        n, c, h, w = inp.size()
+        nt, ht, wt = target.size()
+        #if h != ht and w != wt:#due to _thnn_upsample_nearest2d_forward is not implemented for type torch.cuda.LongTensor at F.interpolate(target.view(1,nt,ht,wt), size=(h, w), mode="nearest")
+        #    target_scaled = target.view(nt,h,w)
+        #print("LOSS_SZ",i, target_scaled.size(), inp.size())
         loss = loss + scale_weight[i] * cross_entropy2d(
-            input=inp, target=target, weight=weight, size_average=size_average
+            input=inp, target=target_scaled, weight=weight, size_average=size_average
         )
 
     return loss
