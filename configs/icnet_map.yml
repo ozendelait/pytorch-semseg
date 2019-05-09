@@ -34,5 +34,6 @@ training:
     reset_epoch: 1
     visdom: False
     loss:
-        name: cross_entropy
+        name: multi_scale_cross_entropy
         size_average: False
+        try_downsampling: True
