@@ -115,6 +115,8 @@ def train(cfg, writer, logger):
     flag = True
     max_iters = cfg["training"]["train_iters"]
     while i <= max_iters and flag:
+        if 'reset_epoch' in cfg["training"]:
+            scheduler.last_epoch = cfg["training"]['reset_epoch']
         #reshuffle training set with each epoch
         trainloader = data.DataLoader(
            t_loader,

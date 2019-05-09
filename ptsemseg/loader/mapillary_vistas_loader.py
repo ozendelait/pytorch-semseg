@@ -20,13 +20,14 @@ class mapillaryVistasLoader(data.Dataset):
         augmentations=None,
         test_mode=False,
         version='cityscapes',
-        img_norm=False
+        img_norm=True
     ):
         self.root = root
         self.split = split
         self.is_transform = is_transform
         self.augmentations = augmentations
         self.n_classes = 65      
+        self.img_norm = img_norm
 
         self.img_size = img_size if isinstance(img_size, tuple) else (img_size, img_size)
         self.mean = np.array([80.5423, 91.3162, 81.4312])
@@ -42,11 +43,11 @@ class mapillaryVistasLoader(data.Dataset):
         self.ignore_id = 250
         self.lut = None
         if version == 'cityscapes':
-            map_to_cs = [250, 250,   1,   4,   4,   2,   3, 250,   1,   1,   0,   1, 250,
-         0,   0,   1,   2,   2,   2,  11,  12,  12,  12,   0, 250,   8,
+            map_to_cs = [250, 250,   1,   4,   4,   2,   3, 0,   1,   1,   0,   1, 250,
+         0,   0,   1,   2,   2,   2,  11,  12,  12,  12,   0, 0,   8,
          9,  10,   9,   9,   8,   9,   2,   2,   2,   2, 250,   2,   5,
          2, 250, 250,   2, 250,   5,   5,   5,   5,   6,   5,   7,   2,
-        18, 250,  14,  13,  14,  17,  16,  14,  14,  14,  11, 250, 250,
+        18, 250,  15,  13,  14,  17,  16,  14,  14,  14,  11, 250, 250,
         250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
         250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
         250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
@@ -121,7 +122,9 @@ class mapillaryVistasLoader(data.Dataset):
                 (self.img_size[0], self.img_size[1]), resample=Image.LANCZOS
             )  # uint8 with RGB mode
             lbl = lbl.resize((self.img_size[0], self.img_size[1]))
-        img = np.array(img).astype(np.float64) / 255.0
+        img = np.array(img).astype(np.float64)
+        if self.img_norm:
+            img = img / 255.0
         img = torch.from_numpy(img.transpose(2, 0, 1)).float()  # From HWC to CHW
         lbl = torch.from_numpy(np.array(lbl)).long()
         lbl[lbl == 65] = self.ignore_id

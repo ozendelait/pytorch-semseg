@@ -17,7 +17,7 @@ class PolynomialLR(_LRScheduler):
         super(PolynomialLR, self).__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        if self.last_epoch % self.decay_iter or self.last_epoch % self.max_iter:
+        if self.last_epoch % self.decay_iter or self.last_epoch > self.max_iter: #TODO: why is here no min_lr?
             return [base_lr for base_lr in self.base_lrs]
         else:
             factor = (1 - self.last_epoch / float(self.max_iter)) ** self.gamma
@@ -36,7 +36,7 @@ class WarmUpLR(_LRScheduler):
 
     def get_lr(self):
         cold_lrs = self.scheduler.get_lr()
-
+        
         if self.last_epoch < self.warmup_iters:
             if self.mode == "linear":
                 alpha = self.last_epoch / float(self.warmup_iters)
