@@ -1,14 +1,14 @@
 model:
     arch: icnetNonBN
 data:
-    dataset: cityscapes
+    dataset: railsem19
     version: cityscapes
     img_norm: False
     train_split: train
     val_split: val
     img_rows: 1025
     img_cols: 2049
-    path: /workspace/data/cityscapes/
+    path: /workspace/data/experiment2_railseg19/
 training:
     train_iters: 9999000
     batch_size: 10
@@ -17,8 +17,8 @@ training:
     print_interval: 12000
     optimizer:
         name: adam
-        lr: 0.00005
-    l_rate: 0.00005
+        lr: 0.001
+    l_rate: 0.001
     augmentations:
         rotate: 7
         saturation: 0.25
@@ -31,7 +31,7 @@ training:
         
     momentum: 0.9
     weight_decay: 0.0001
-    resume: /workspace/data/bestmodel/icnetNonBN_csmap_iou66.pkl
+    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou66.pkl
     reset_epoch: 1
     visdom: False
     loss:

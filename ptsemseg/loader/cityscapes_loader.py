@@ -195,7 +195,7 @@ class cityscapesLoader(data.Dataset):
         # NHWC -> NCHW
         img = img.transpose(2, 0, 1)
 
-        classes = np.unique(lbl)
+        #classes = np.unique(lbl)
         lbl = lbl.astype(float)
         lbl = m.imresize(lbl, (self.img_size[0], self.img_size[1]), "nearest", mode="F")
         lbl = lbl.astype(int)
@@ -203,9 +203,9 @@ class cityscapesLoader(data.Dataset):
         #if not np.all(classes == np.unique(lbl)):
         #    print("WARN: resizing labels yielded fewer classes")
 
-        if not np.all(np.unique(lbl[lbl != self.ignore_index]) < self.n_classes):
-            print("after det", classes, np.unique(lbl))
-            raise ValueError("Segmentation map contained invalid class values")
+        #if not np.all(np.unique(lbl[lbl != self.ignore_index]) < self.n_classes):
+        #    print("after det", classes, np.unique(lbl))
+        #    raise ValueError("Segmentation map contained invalid class values")
 
         img = torch.from_numpy(img).float()
         lbl = torch.from_numpy(lbl).long()
