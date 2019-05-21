@@ -141,6 +141,8 @@ class railsem19Loader(data.Dataset):
         )
         if not os.path.exists(lbl_path):
             lbl_path = lbl_path.replace("gtFine_labelIds","_gtFine_labelTrainIds")
+        if not os.path.exists(lbl_path):
+            lbl_path = lbl_path.replace("_gtFine_labelTrainIds","")
 
         img = m.imread(img_path)
         img = np.array(img, dtype=np.uint8)

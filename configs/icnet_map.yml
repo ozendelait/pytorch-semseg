@@ -32,6 +32,7 @@ training:
     momentum: 0.9
     weight_decay: 0.0001
     resume: /workspace/data/bestmodel/icnetNonBN_csmap_iou66.pkl
+    reset_optimizer: True
     reset_epoch: 1
     visdom: False
     loss:

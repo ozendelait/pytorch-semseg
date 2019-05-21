@@ -5,7 +5,7 @@ import timeit
 import numpy as np
 
 from torch.utils import data
-
+from tqdm import tqdm_notebook as tqdm
 
 from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
@@ -45,7 +45,7 @@ def validate(cfg, args):
     model.eval()
     model.to(device)
 
-    for i, (images, labels) in enumerate(valloader):
+    for i, (images, labels) in enumerate(tqdm(valloader,desc='Validating...')):
         start_time = timeit.default_timer()
 
         images = images.to(device)
@@ -140,6 +140,8 @@ def main_val(argv=sys.argv[1:]):
 
     with open(args.config) as fp:
         cfg = yaml.load(fp)
+    #need to reduce batchsize to prevent cuda errors
+    cfg['training']['batch_size'] = 1
 
     return validate(cfg, args)
 

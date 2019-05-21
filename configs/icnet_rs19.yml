@@ -16,9 +16,9 @@ training:
     val_interval: 12000
     print_interval: 12000
     optimizer:
-        name: adam
-        lr: 0.001
-    l_rate: 0.001
+        name: adamax
+        lr: 0.00002
+    l_rate: 0.00002
     augmentations:
         rotate: 7
         saturation: 0.25
@@ -31,8 +31,9 @@ training:
         
     momentum: 0.9
     weight_decay: 0.0001
-    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou66.pkl
+    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou67.pkl
     reset_epoch: 1
+    reset_optimizer: True
     visdom: False
     loss:
         name: multi_scale_cross_entropy

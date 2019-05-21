@@ -91,14 +91,16 @@ def train(cfg, writer, logger):
     if cfg["training"]["resume"] is not None:
         if os.path.isfile(cfg["training"]["resume"]):
             logger.info(
-                "Loading model and optimizer from checkpoint '{}'".format(cfg["training"]["resume"])
+                "Loading model and optimizer1 from checkpoint '{}'".format(cfg["training"]["resume"])
             )
             checkpoint = torch.load(cfg["training"]["resume"])
             model.load_state_dict(checkpoint["model_state"])
-            if "optimizer_state" in checkpoint:
+            if "optimizer_state" in checkpoint and not cfg["training"].get("reset_optimizer", False):
                 optimizer.load_state_dict(checkpoint["optimizer_state"])
                 scheduler.load_state_dict(checkpoint["scheduler_state"])
                 start_iter = checkpoint["epoch"]
+            else:
+                logger.info("Resetting optimizer/scheduler")
             logger.info(
                 "Loaded checkpoint '{}' (iter {})".format(
                     cfg["training"]["resume"], start_iter
