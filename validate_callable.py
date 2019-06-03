@@ -1,4 +1,4 @@
-import yaml, sys
+import yaml, sys, os
 import torch
 import argparse
 import timeit
@@ -10,19 +10,35 @@ from tqdm import tqdm_notebook as tqdm
 from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.metrics import runningScore
-from ptsemseg.utils import convert_state_dict
+from ptsemseg.utils import convert_state_dict,recursive_glob
+import scipy.misc as m
 
 torch.backends.cudnn.benchmark = True
 
+def filepath_to_dict_id(f):
+    return os.path.basename(f).replace('.png','').replace("_gtFine_labelTrainIds","").replace("_leftImg8bit","")
+
+def dict_gtfiles_ids(start_dir, pattern = "png"):
+    files = recursive_glob(start_dir, pattern)
+    return {filepath_to_dict_id(f):f for f in files}
 
 def validate(cfg, args):
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    offline_res={}
+    #print("device0:",len(args.offline_res), cfg["training"]["batch_size"], len(args.offline_res))
+    if len(args.offline_res) > 0:
+        offline_res = dict_gtfiles_ids(args.offline_res)
+        if len(offline_res) == 0:
+            print("Error: No potential result ids found in folder "+args.offline_res)
+            return [], [], []
+        device = torch.device("cpu")
+        cfg["data"]["version"] = "offline_res"
+        cfg["training"]["batch_size"] = 1
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     # Setup Dataloader
     data_loader = get_loader(cfg["data"]["dataset"])
     data_path = cfg["data"]["path"]
-
     loader = data_loader(
         data_path,
         split=cfg["data"]["val_split"],
@@ -44,13 +60,21 @@ def validate(cfg, args):
     model.load_state_dict(state)
     model.eval()
     model.to(device)
-
+    total_num_max = len(valloader)
     for i, (images, labels) in enumerate(tqdm(valloader,desc='Validating...')):
         start_time = timeit.default_timer()
-
-        images = images.to(device)
-
-        if args.eval_flip:
+        idcheck = "%08i"%i
+        if len(offline_res) == 0:
+            images = images.to(device)
+        if len(offline_res) > 0:
+            id_offline_res = filepath_to_dict_id(images[0])
+            if not id_offline_res in offline_res:
+                print("Warning: id "+ id_offline_res + "not found in offline results!")
+                continue
+            idcheck = id_offline_res
+            pred = m.imread(offline_res[id_offline_res])
+            pred = np.array(pred, dtype=np.uint8).reshape(1, pred.shape[0], pred.shape[1])
+        elif args.eval_flip:
             outputs = model(images)
 
             # Flip images in numpy (not support in tensor)
@@ -76,16 +100,16 @@ def validate(cfg, args):
                     i + 1, pred.shape[0] / elapsed_time
                 )
             )
-        running_metrics.update(gt, pred)
+        running_metrics.update(gt, pred, [idcheck])
 
     score, class_iou = running_metrics.get_scores()
-
+    conf_mats = running_metrics.get_confmats()
     for k, v in score.items():
         print(k, v)
 
     for i in range(n_classes):
         print(i, class_iou[i])
-    return score, class_iou
+    return score, class_iou, conf_mats
 
 
 def main_val(argv=sys.argv[1:]):
@@ -103,6 +127,13 @@ def main_val(argv=sys.argv[1:]):
         type=str,
         default="fcn8s_pascal_1_26.pkl",
         help="Path to the saved model",
+    )
+    parser.add_argument(
+        "--offline_res",
+        nargs="?",
+        type=str,
+        default="",
+        help="Path to folder with offline results",
     )
     parser.add_argument(
         "--eval_flip",
@@ -134,7 +165,7 @@ def main_val(argv=sys.argv[1:]):
         help="Disable evaluation with time (fps) measurement |\
                               True by default",
     )
-    parser.set_defaults(measure_time=True)
+    parser.set_defaults(measure_time=False, eval_flip= False)
 
     args = parser.parse_args(argv)
 

@@ -6,32 +6,32 @@ data:
     img_norm: False
     train_split: train
     val_split: val
-    img_rows: 1025
-    img_cols: 2049
+    img_rows: 1080
+    img_cols: 1920
     path: /workspace/data/experiment2_railseg19/
 training:
     train_iters: 9999000
     batch_size: 10
     n_workers: 10
-    val_interval: 12000
-    print_interval: 12000
+    val_interval: 14000
+    print_interval: 14000
     optimizer:
-        name: adamax
-        lr: 0.00002
-    l_rate: 0.00002
+        name: adam
+        lr: 0.0001
+    l_rate: 0.0001
     augmentations:
-        rotate: 7
+        rotate: 8
         saturation: 0.25
-        hue: 0.075
+        hue: 0.08
         contrast: 0.125
         vflip: 0.5
     lr_schedule: 
         name: poly_lr
-        max_iter: 12000
+        max_iter: 14100
         
     momentum: 0.9
     weight_decay: 0.0001
-    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou67.pkl
+    resume: /workspace/data/bestmodel/icnetNonBN_rs19_iou67p00.pkl
     reset_epoch: 1
     reset_optimizer: True
     visdom: False

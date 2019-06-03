@@ -47,6 +47,7 @@ class railsem19Loader(data.Dataset):
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
 	"railsem19": [0.0, 0.0, 0.0],
+        "offline_res": [-1.0],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
     def __init__(
@@ -86,7 +87,7 @@ class railsem19Loader(data.Dataset):
         self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
         if len(self.files[split]) == 0:
             self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
-        print("INFO FOUND IMGS", split, len(self.files[split]), self.images_base)
+        print("INFO FOUND IMGS", split, len(self.files[split]), self.images_base, img_size)
         self.void_classes = [19,20,253,254,255]
         self.valid_classes = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
         self.class_names = [
@@ -143,17 +144,20 @@ class railsem19Loader(data.Dataset):
             lbl_path = lbl_path.replace("gtFine_labelIds","_gtFine_labelTrainIds")
         if not os.path.exists(lbl_path):
             lbl_path = lbl_path.replace("_gtFine_labelTrainIds","")
-
-        img = m.imread(img_path)
-        img = np.array(img, dtype=np.uint8)
+        is_offline_res = np.array(self.mean).shape[0] == 1
+        if is_offline_res:
+            img = lbl_path
+        else:
+            img = m.imread(img_path)
+            img = np.array(img, dtype=np.uint8)
 
         lbl = m.imread(lbl_path)
         lbl = self.encode_segmap(np.array(lbl, dtype=np.uint8))
 
-        if self.augmentations is not None:
+        if not is_offline_res and self.augmentations is not None:
             img, lbl = self.augmentations(img, lbl)
 
-        if self.is_transform:
+        if not is_offline_res and self.is_transform:
             img, lbl = self.transform(img, lbl)
 
         return img, lbl

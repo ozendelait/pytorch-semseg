@@ -7,6 +7,7 @@ import numpy as np
 class runningScore(object):
     def __init__(self, n_classes):
         self.n_classes = n_classes
+        self.confusion_matrices = {}
         self.confusion_matrix = np.zeros((n_classes, n_classes))
 
     def _fast_hist(self, label_true, label_pred, n_class):
@@ -16,8 +17,8 @@ class runningScore(object):
         ).reshape(n_class, n_class)
         return hist
 
-    def update(self, label_trues, label_preds):
-        for lt, lp in zip(label_trues, label_preds):
+    def update(self, label_trues, label_preds, add_names=[]):
+        for idx_z, (lt, lp) in enumerate(zip(label_trues, label_preds)):
             if lp.shape[0] != lt.shape[0] or lp.shape[1] != lp.shape[1]:
                 pl = []
                 for i,d in enumerate(lt.shape):
@@ -26,7 +27,13 @@ class runningScore(object):
                     pl += [p1, p0-p1]
                 lp0 = np.pad(lp,[(pl[0],pl[1]),(pl[2],pl[3])],mode='constant')
                 lp = lp0
-            self.confusion_matrix += self._fast_hist(lt.flatten(), lp.flatten(), self.n_classes)
+            single_mat = self._fast_hist(lt.flatten(), lp.flatten(), self.n_classes)
+            if len(add_names) > idx_z:
+                self.confusion_matrices[add_names[idx_z]] = single_mat
+            self.confusion_matrix += single_mat
+
+    def get_confmats(self):
+        return self.confusion_matrices
 
     def get_scores(self):
         """Returns accuracy score evaluation result.
