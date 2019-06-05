@@ -16,27 +16,23 @@ def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
             files.extend(glob.glob(os.path.join(dir,p)))
     return files
 
-def prepare_img(img, orig_size, model_name, loader, img_norm):
-    resized_img = misc.imresize(img, (loader.img_size[0], loader.img_size[1]), interp="bicubic")
-    if model_name[:min(5,len(model_name))] in ["pspne", "icnet"]:
-        # uint8 with RGB mode, resize width and height which are odd numbers
-        img = misc.imresize(img, (orig_size[0] // 2 * 2 + 1, orig_size[1] // 2 * 2 + 1))
-    else:
-        img = misc.imresize(img, (loader.img_size[0], loader.img_size[1]))
+mean_rgb = {
+        "pascal": [103.939, 116.779, 123.68],
+        "cityscapes": [0.0, 0.0, 0.0],
+	"railsem19": [0.0, 0.0, 0.0]}
 
-    img = img[:, :, ::-1]
+def prepare_img(img0, orig_size, img_mean, img_norm):
+    img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
+    img = img[:, :, ::-1]  # RGB -> BGR
     img = img.astype(np.float64)
-    img -= loader.mean
+    img -= img_mean
     if img_norm:
         img = img.astype(float) / 255.0
-
-    # NHWC -> NCHW
     img = img.transpose(2, 0, 1)
     img = np.expand_dims(img, 0)
-    return img, resized_img
+    return img
 
 def test(args):
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_file_name = os.path.split(args.model_path)[1]
@@ -48,17 +44,24 @@ def test(args):
         
     # Setup image
     print("Read Input Image from : {}".format(args.img_path))
-    img = misc.imread(allfiles[0])
-    orig_size = img.shape[:-1]
+
+    if args.inp_dim == None:
+       img = misc.imread(allfiles[0])
+       orig_size = img.shape[:-1]
+    else:
+       orig_size = [int(dim) for dim in args.inp_dim.split("x")]
+
     data_loader = get_loader(args.dataset)
+    img_mean = mean_rgb[args.version]
     loader = data_loader(root=None, is_transform=True, version=args.version, img_norm=args.img_norm, test_mode=True)
-   
+    
     n_classes = loader.n_classes
   
     # Setup Model
-    model_dict = {"arch": model_name}
+    model_dict = {"arch": model_name, "input_size": [orig_size[1],orig_size[0]]}
     model = get_model(model_dict, n_classes, version=args.dataset)
     state = convert_state_dict(torch.load(args.model_path)["model_state"])
+   
     model.load_state_dict(state)
     model.eval()
     model.to(device)
@@ -76,7 +79,7 @@ def test(args):
         if os.path.exists(outname):
             continue
         img =misc.imread(f)
-        img, resized_img = prepare_img(img, orig_size, model_name, loader, args.img_norm)
+        img = prepare_img(img, orig_size, img_mean, args.img_norm)# prepare_img(img, orig_size, model_name, loader, args.img_norm)
         with torch.no_grad():
             img = torch.from_numpy(img).float()
             images = img.to(device)
@@ -110,6 +113,21 @@ def main_test(arg0):
         default="pascal",
         help="Dataset to use ['pascal, camvid, ade20k etc']",
     )
+    parser.add_argument(
+        "--inp_dim",
+        nargs="?",
+        type=str,
+        default=None,
+        help="Fix input/output dimensions (e.g. 1920x1080); default: use dimensions of first test image",
+    )
+    parser.add_argument(
+        "--dataset",
+        nargs="?",
+        type=str,
+        default="pascal",
+        help="Dataset to use ['pascal, camvid, ade20k etc']",
+    )
+
 
     parser.add_argument(
         "--version",
