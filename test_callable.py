@@ -51,14 +51,15 @@ def test(args):
     else:
        orig_size = [int(dim) for dim in args.inp_dim.split("x")]
 
+    print(orig_size)
     data_loader = get_loader(args.dataset)
     img_mean = mean_rgb[args.version]
-    loader = data_loader(root=None, is_transform=True, version=args.version, img_norm=args.img_norm, test_mode=True)
+    loader = data_loader(root=None, is_transform=True, version=args.version, img_size=orig_size, img_norm=args.img_norm, test_mode=True)
     
     n_classes = loader.n_classes
   
     # Setup Model
-    model_dict = {"arch": model_name, "input_size": [orig_size[1],orig_size[0]]}
+    model_dict = {"arch": model_name, "input_size":tuple(orig_size)}
     model = get_model(model_dict, n_classes, version=args.dataset)
     state = convert_state_dict(torch.load(args.model_path)["model_state"])
    
@@ -120,15 +121,6 @@ def main_test(arg0):
         default=None,
         help="Fix input/output dimensions (e.g. 1920x1080); default: use dimensions of first test image",
     )
-    parser.add_argument(
-        "--dataset",
-        nargs="?",
-        type=str,
-        default="pascal",
-        help="Dataset to use ['pascal, camvid, ade20k etc']",
-    )
-
-
     parser.add_argument(
         "--version",
         type=str,
