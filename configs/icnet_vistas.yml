@@ -1,0 +1,44 @@
+model:
+    arch: icnetNonBN
+    input_size: [1080, 1920]
+data:
+    dataset: vistas
+    version: vistas
+    img_norm: True
+    train_split: training
+    val_split: validation
+    path: /workspace/data/mapillary/
+    root: /workspace/data/mapillary/
+    val_asp_ratio_delta: -1.0
+training:
+    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou19p1.pkl
+    train_iters: 9999000
+    batch_size: 5
+    n_workers: 10
+    val_interval: 14000
+    print_interval: 14000
+    optimizer:
+        name: adam
+        lr: 1.0e-4
+        weight_decay: 0.0001
+    l_rate: 0.0001
+    augmentations:
+        rsize: [1920, 7680]
+        rcrop: [1080, 1920]
+        rotate: 8
+        saturation: 0.25
+        hue: 0.08
+        contrast: 0.125
+        vflip: 0.5
+    lr_schedule: 
+        name: poly_lr
+        max_iter: 14100
+    momentum: 0.9
+    weight_decay: 0.0001
+    reset_epoch: 1
+    reset_optimizer: True
+    visdom: False
+    loss:
+        name: multi_scale_cross_entropy
+        size_average: True
+        try_downsampling: True
