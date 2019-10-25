@@ -19,7 +19,7 @@ def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
 mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
-	"railsem19": [0.0, 0.0, 0.0]}
+        "railsem19": [0.0, 0.0, 0.0]}
 
 def prepare_img(img0, orig_size, img_mean, img_norm):
     img = misc.imresize(img0, orig_size)  # uint8 with RGB mode

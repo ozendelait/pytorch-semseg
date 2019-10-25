@@ -20,6 +20,8 @@ class mapillaryVistasLoader(data.Dataset):
         augmentations=None,
         test_mode=False,
         version='cityscapes',
+        asp_ratio_delta_min = -1.0,
+        asp_ratio_delta_max = -1.0,  
         img_norm=True
     ):
         self.root = root
@@ -28,6 +30,8 @@ class mapillaryVistasLoader(data.Dataset):
         self.augmentations = augmentations
         self.n_classes = 65      
         self.img_norm = img_norm
+        self.asp_ratio_delta_min = asp_ratio_delta_min
+        self.asp_ratio_delta_max = asp_ratio_delta_max 
 
         self.img_size = img_size if isinstance(img_size, tuple) else (img_size, img_size)
         self.mean = np.array([80.5423, 91.3162, 81.4312])
@@ -41,6 +45,7 @@ class mapillaryVistasLoader(data.Dataset):
         self.class_ids, self.class_names, self.class_colors = self.parse_config()
 
         self.ignore_id = 250
+        self.first_run = True
         self.lut = None
         if version == 'cityscapes':
             map_to_cs = [250, 250,   1,   4,   4,   2,   3, 0,   1,   1,   0,   1, 250,
@@ -117,11 +122,30 @@ class mapillaryVistasLoader(data.Dataset):
         if self.img_size == ("same", "same"):
             pass
         else:
+            asp_ratio_src = img.size[0]/img.size[1]
+            asp_ratio_trg = self.img_size[1]/self.img_size[0]
+            if self.asp_ratio_delta_min > 0.0 and asp_ratio_src < asp_ratio_trg*self.asp_ratio_delta_min:
+                if img.size[0] >= img.size[1]:
+                    w_trg = img.size[1]*asp_ratio_trg*self.asp_ratio_delta_min
+                    img = img.crop(((img.size[0]-w_trg)/2, 0, w_trg, img.size[1]))
+                else:
+                    h_trg = img.size[0]/(asp_ratio_trg*self.asp_ratio_delta_min)
+                    img = img.crop((0,(img.size[1]-h_trg)/2, img.size[0], h_trg))
+            elif self.asp_ratio_delta_max > 0.0 and asp_ratio_src > asp_ratio_trg*self.asp_ratio_delta_max:
+                if img.size[0] >= img.size[1]:
+                    w_trg = img.size[1]*asp_ratio_trg*self.asp_ratio_delta_max
+                    img = img.crop(((img.size[0]-w_trg)/2, 0, w_trg, img.size[1]))
+                else:
+                    h_trg = img.size[0]/(asp_ratio_trg*self.asp_ratio_delta_max)
+                    img = img.crop((0,(img.size[1]-h_trg)/2, img.size[0], h_trg)) 
+            if self.first_run:
+                print("Input0: self.img_size (h,w) "+str(self.img_size) + " img_sz (w,h): "+ str(img.size))
+            self.first_run = False
             #trg_h_sc = self.img_size[1]
             img = img.resize(
-                (self.img_size[0], self.img_size[1]), resample=Image.LANCZOS
+                (self.img_size[1], self.img_size[0]), resample=Image.LANCZOS
             )  # uint8 with RGB mode
-            lbl = lbl.resize((self.img_size[0], self.img_size[1]))
+            lbl = lbl.resize((img.size[0], img.size[1]))
         img = np.array(img).astype(np.float64)
         if self.img_norm:
             img = img / 255.0
