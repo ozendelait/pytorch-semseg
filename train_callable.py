@@ -317,7 +317,7 @@ def main_tr(argv=sys.argv[1:]):
     args = parser.parse_args(argv)
 
     with open(args.config) as fp:
-        cfg = yaml.load(fp)
+        cfg = yaml.safe_load(fp)
 
     run_id = random.randint(1, 100000)
     logdir = os.path.join("/workspace/data/pytsegmruns", os.path.basename(args.config)[:-4], str(run_id))

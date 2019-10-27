@@ -549,8 +549,8 @@ class pyramidPooling(nn.Module):
                 k_sizes.append((int(h / pool_size), int(w / pool_size)))
                 strides.append((int(h / pool_size), int(w / pool_size)))
         else:  # eval mode and icnet: pre-trained for 1025 x 2049
-            k_sizes = [(8, 15), (13, 25), (17, 33), (33, 65)]
-            strides = [(5, 10), (10, 20), (16, 32), (33, 65)]
+            k_sizes = [(8, 15), (13, 25), (17, min(33, x.shape[2])), (33, min(65, x.shape[3]))]
+            strides = [(5, 10), (10, 20), (16, min(32, x.shape[2])), (33, min(65, x.shape[3]))]
 
         if self.fusion_mode == "cat":  # pspnet: concat (including x)
             output_slices = [x]
@@ -568,7 +568,9 @@ class pyramidPooling(nn.Module):
             pp_sum = x
 
             for i, (module, pool_size) in enumerate(zip(self.path_module_list, self.pool_sizes)):
+                #print("INPUT_SZ " + str(i) + " " + str(x.shape)+ " k "+ str(k_sizes[i])+ " s " + str(strides[i]))
                 out = F.avg_pool2d(x, k_sizes[i], stride=strides[i], padding=0)
+                #print("-> " + str(out.shape))
                 # out = F.adaptive_avg_pool2d(x, output_size=(pool_size, pool_size))
                 if self.model_name != "icnet":
                     out = module(out)

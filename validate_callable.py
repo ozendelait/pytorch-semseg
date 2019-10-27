@@ -176,7 +176,7 @@ def main_val(argv=sys.argv[1:]):
     args = parser.parse_args(argv)
 
     with open(args.config) as fp:
-        cfg = yaml.load(fp)
+        cfg = yaml.safe_load(fp)
     #need to reduce batchsize to prevent cuda errors
     cfg['training']['batch_size'] = 1
 
