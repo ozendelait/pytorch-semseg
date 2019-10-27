@@ -21,6 +21,8 @@ from ptsemseg.optimizers import get_optimizer
 
 from tensorboardX import SummaryWriter
 import resource
+import psutil
+import gc
 
 def report_cuda_mem(device0=None):
     bytetogb = 1.0/float(1024*1024*1024)
@@ -29,26 +31,33 @@ def report_cuda_mem(device0=None):
 def report_mem_both(device0=None):
     #not found resource.RUSAGE_BOTH
     kbtogb = 1.0/float(1024*1024)
+    bytetogb = 1.0/float(1024*1024*1024)
     cpu_usage_self = resource.getrusage(resource.RUSAGE_SELF) 
     cpu_usage_child = resource.getrusage(resource.RUSAGE_CHILDREN) 
-    ret_str = "CPU:  %0.3f/%0.3f " % (float(cpu_usage_self.ru_isrss + cpu_usage_child.ru_isrss)*kbtogb, float(cpu_usage_self.ru_maxrss + cpu_usage_child.ru_maxrss)*kbtogb)
+    cpu_usage_curr = float(psutil.Process(os.getpid()).memory_info().rss)
+    ret_str = "CPU:  %0.3f/%0.3f " % (cpu_usage_curr*bytetogb, float(cpu_usage_self.ru_maxrss + cpu_usage_child.ru_maxrss)*kbtogb)
     ret_str += " GPU "+report_cuda_mem(device0)
     return ret_str
 
 def train(cfg, writer, logger):
-    
+    bytetogb = 1.0/float(1024*1024*1024)
+    cuda_is_available = torch.cuda.is_available()
     report_mem = True #cfg.get("report_mem",False)
+    calc_loss_on_cpu = False#True #cuda_is_available and cfg.get("calc_loss_on_cpu",False) 
     
     # Setup seeds
     torch.manual_seed(cfg.get("seed", 1337))
     torch.cuda.manual_seed(cfg.get("seed", 1337))
     np.random.seed(cfg.get("seed", 1337))
     random.seed(cfg.get("seed", 1337))
-
+    
+    if calc_loss_on_cpu:
+        device_cpu = torch.device("cpu")
+    
      # Setup device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if cuda_is_available else "cpu")
     if report_mem:
-        print("0.) After device setup (total free: %0.3f): "%(torch.cuda.get_device_properties(device).total_memory)+report_mem_both())
+        print("0.) After device setup (total free: %0.3f): " % (bytetogb * float(torch.cuda.get_device_properties(device).total_memory)) + report_mem_both())
    
     # Setup Augmentations
     augmentations = cfg["training"].get("augmentations", None)
@@ -76,8 +85,8 @@ def train(cfg, writer, logger):
         split=cfg["data"]["val_split"],
         img_size=(cfg["model"].get("input_size",[cfg["data"].get("img_rows","same"), "same"])[0] , cfg["model"].get("input_size",["same",cfg["data"].get("img_cols", "same")])[1]),
         version=cfg["data"].get("version","cityscapes"),
-        asp_ratio_delta_min = 1.0/val_delta,
-        asp_ratio_delta_max = val_delta,      
+        asp_ratio_delta_min = cfg["data"].get("val_asp_ratio_delta_min", 1.0/val_delta),
+        asp_ratio_delta_max = cfg["data"].get("val_asp_ratio_delta_max", val_delta),      
         img_norm=cfg["data"].get("img_norm",True),
     )
 
@@ -106,7 +115,7 @@ def train(cfg, writer, logger):
     logger.info("Using optimizer {}".format(optimizer))
     scheduler = get_scheduler(optimizer, cfg["training"]["lr_schedule"])
     
-    loss_fn = get_loss_function(cfg)
+    loss_fn = get_loss_function(cfg) 
     logger.info("Using loss {}".format(loss_fn))
 
     start_iter = 0
@@ -166,7 +175,7 @@ def train(cfg, writer, logger):
         t_max, i_start = len(trainloader), i
         for (images, labels) in tqdm(trainloader, desc = 'Training Epoch %i; mIouMax: %f'%(int(i//training_iters),best_iou)):
             i += 1
- 
+            
             start_ts = time.time()
             scheduler.step()
             model.train()
@@ -189,9 +198,6 @@ def train(cfg, writer, logger):
             if i == i_start+2 and report_mem: #c4
                 print("23.)After loss step: "+report_mem_both(device))
             optimizer.step()
-            if i == i_start+2 and report_mem: #c5
-                print("24.)After optimizer step: "+report_mem_both(device))
-            
             time_meter.update(time.time() - start_ts)
 
             if (i + 1) % printing_iters == 0:
@@ -209,29 +215,51 @@ def train(cfg, writer, logger):
                 time_meter.reset()
 
             if i  % training_iters == 0 or (i + 1 - i_start) == t_max:
+            #if i > i_start + 2:
                 model.eval()
                 with torch.no_grad():
                     for i_val, (images_val, labels_val) in tqdm(enumerate(valloader), desc = "Validation"):
-                        if i_val < 2 and report_mem:
-                            print("24.5)Before val device copy: "+report_mem_both(device))
-            
+                        if i_val < 1 and report_mem:
+                            print("24)Before val device copy: "+report_mem_both(device))
+                        
                         images_val = images_val.to(device)
-                        labels_val = labels_val.to(device)
-                        if i_val < 2 and report_mem:
+                        if i_val < 1 and report_mem:
                             print("25.)After val device copy: "+report_mem_both(device))
             
                         outputs = model(images_val)
-                        if i_val < 2 and report_mem:
+                        del images_val
+                        if i_val < 1 and report_mem:
                             print("26.)After val prediction: "+report_mem_both(device))
-            
-                        val_loss = loss_fn(input=outputs, target=labels_val)
-                        if i_val < 2 and report_mem:
+                        
+                        pred = outputs.data.max(1)[1].cpu().numpy()
+                        if calc_loss_on_cpu:
+                            outputs_cpu = outputs.data.cpu()
+                            del outputs
+                            labels_val = labels_val.to(device_cpu)
+                            if i_val < 1 and report_mem:
+                                print("26.5)After labelsval to device: "+report_mem_both(device))
+                            loss_fn_cpu = get_loss_function(cfg)
+                            if i_val < 1 and report_mem:
+                                print("26.5)After loss_fn gotten: "+report_mem_both(device))
+                            val_loss = loss_fn_cpu(input=outputs_cpu, target=labels_val)
+                            if i_val < 1 and report_mem:
+                                print("26.5)After loss_fn_cpu prediction: "+report_mem_both(device))
+                            del outputs_cpu
+                            gt = labels_val.numpy()
+                            del labels_val
+                            del loss_fn_cpu
+                            gc.collect()
+                        else:
+                            labels_val = labels_val.to(device)
+                            val_loss = loss_fn(input=outputs, target=labels_val)
+                            gt = labels_val.data.cpu().numpy()
+                        if i_val < 1 and report_mem:
                             print("27.)After val loss calc: "+report_mem_both(device))
             
-                        pred = outputs.data.max(1)[1].cpu().numpy()
-                        gt = labels_val.data.cpu().numpy()
                         running_metrics_val.update(gt, pred)
-                        val_loss_meter.update(val_loss.item())            
+                        val_loss_meter.update(val_loss.item())
+                        del val_loss
+                        #break
                 writer.add_scalar("loss/val_loss", val_loss_meter.avg, i + 1)
                 logger.info("Iter %d Loss: %.4f" % (i + 1, val_loss_meter.avg))
 
@@ -267,6 +295,7 @@ def train(cfg, writer, logger):
                     torch.save(state, save_path)
                 break
 
+            #if i > i_start + 2:
             if (i + 1) == max_iters:
                 flag = False
                 break

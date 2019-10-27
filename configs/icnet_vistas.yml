@@ -9,9 +9,9 @@ data:
     val_split: validation
     path: /workspace/data/mapillary/
     root: /workspace/data/mapillary/
-    val_asp_ratio_delta: -1.0
+    val_asp_ratio_delta: 1.5
 training:
-    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou19p1.pkl
+    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou20p3.pkl
     train_iters: 9999000
     batch_size: 5
     n_workers: 10

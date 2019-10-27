@@ -138,8 +138,8 @@ class mapillaryVistasLoader(data.Dataset):
                 else:
                     h_trg = img.size[0]/(asp_ratio_trg*self.asp_ratio_delta_max)
                     img = img.crop((0,(img.size[1]-h_trg)/2, img.size[0], h_trg)) 
-            if self.first_run:
-                print("Input0: self.img_size (h,w) "+str(self.img_size) + " img_sz (w,h): "+ str(img.size))
+            #if self.first_run:
+            #    print("Input0: self.img_size (h,w) "+str(self.img_size) + " img_sz (w,h): "+ str(img.size))
             self.first_run = False
             #trg_h_sc = self.img_size[1]
             img = img.resize(
