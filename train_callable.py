@@ -39,6 +39,51 @@ def report_mem_both(device0=None):
     ret_str += " GPU "+report_cuda_mem(device0)
     return ret_str
 
+def calc_histogram(cfg, split_name):
+    data_path = cfg["data"]["path"]
+    data_loader = get_loader(cfg["data"]["dataset"])
+    h_loader = data_loader(
+        data_path,
+        is_transform=True,
+        split=split_name,
+        img_size=(("same", "same")),
+        version=cfg["data"].get("version","cityscapes"),  
+        img_norm=False,
+        offline_res="hist"
+    )
+    hist_loader = data.DataLoader( h_loader, batch_size=1, num_workers=cfg["training"]["n_workers"] )
+    max_num = len(hist_loader)
+    idx_to_name = {}
+    name_to_idx = {}
+    max_label_num = h_loader.n_classes + 1
+    hist_all = np.zeros((max_num, max_label_num), dtype=np.uint64)
+    for i_val, (images_vals, labels_hist) in tqdm(enumerate(hist_loader), total = max_num, desc = "Calculating "+split_name+" histograms"):
+        label_hist_np = labels_hist.numpy()
+        idx_to_name[i_val] = images_vals
+        hist_all[i_val,0:label_hist_np.shape[1]] = label_hist_np[0,:]
+    return hist_all, idx_to_name
+
+def hist_to_framenames(hist_all, idx_to_name, boost_idx, boost_multipl, boost_add_ratio):
+    ids_val0 = list(np.nonzero(hist_all[:,boost_idx])[0])
+    ids_val = ids_val0[:]
+    if boost_multipl > 1: #repeat frames which need boosting, can introduce serious amount of overfitting
+        for _ in range(1,int(boost_multipl)):
+            ids_val += ids_val0[:]
+    num_add = int(float(len(ids_val)) * boost_add_ratio+0.5)
+    if num_add > 0:
+        ids_containing = set(ids_val)
+        ids_remainder = list(set(range(hist_all.shape[0]))-ids_containing)
+        if len(ids_remainder) > num_add:
+            add_ids = np.random.choice(len(ids_remainder), num_add)
+            for id0 in add_ids:
+                ids_val.append(ids_remainder[id0])
+        else:
+            ids_val += ids_remainder
+    all_frames = []
+    for id0 in ids_val:
+        all_frames.append(idx_to_name[id0][0])
+    return all_frames
+
 def train(cfg, writer, logger):
     bytetogb = 1.0/float(1024*1024*1024)
     cuda_is_available = torch.cuda.is_available()
@@ -58,7 +103,18 @@ def train(cfg, writer, logger):
     device = torch.device("cuda" if cuda_is_available else "cpu")
     if report_mem:
         print("0.) After device setup (total free: %0.3f): " % (bytetogb * float(torch.cuda.get_device_properties(device).total_memory)) + report_mem_both())
-   
+
+    # Special index boosting data:
+    boost_indices = cfg["training"].get("boost_indices", -1)
+    if not isinstance(boost_indices, list):
+        boost_indices = [boost_indices]
+    boost_multipl = cfg["training"].get("boost_multipl", -1)
+    boost_add_ratio = cfg["training"].get("boost_add_ratio", -1)
+    val_frame_list = None
+    if len(boost_indices) > 0:
+        hist_val, idx_to_name_val = calc_histogram(cfg, cfg["data"]["val_split"])
+        hist_train, idx_to_name_train = calc_histogram(cfg, cfg["data"]["train_split"])
+        
     # Setup Augmentations
     augmentations = cfg["training"].get("augmentations", None)
     data_aug = get_composed_augmentations(augmentations)
@@ -69,16 +125,23 @@ def train(cfg, writer, logger):
     if val_delta < 1.0:
         val_delta = -1.0
 
-    t_loader = data_loader(
-        data_path,
-        is_transform=True,
-        split=cfg["data"]["train_split"],
-        img_size=(cfg["data"].get("img_rows","same"), cfg["data"].get("img_cols", "same")),
-        version=cfg["data"].get("version","cityscapes"),
-        img_norm=cfg["data"].get("img_norm",True),
-        augmentations=data_aug,
-    )
+    if len(boost_indices) == 0:
+        t_loader = data_loader(
+            data_path,
+            is_transform=True,
+            split=cfg["data"]["train_split"],
+            img_size=(cfg["data"].get("img_rows","same"), cfg["data"].get("img_cols", "same")),
+            version=cfg["data"].get("version","cityscapes"),
+            img_norm=cfg["data"].get("img_norm",True),
+            augmentations=data_aug,
+        )
     
+    val_augmentations = None
+    val_retries = 1
+    if "validation" in cfg and "augmentations" in cfg["validation"]:
+        val_augmentations =  get_composed_augmentations(cfg["validation"]["augmentations"])
+        val_retries = cfg["validation"].get("boost_retries",1)
+        
     v_loader = data_loader(
         data_path,
         is_transform=True,
@@ -88,9 +151,11 @@ def train(cfg, writer, logger):
         asp_ratio_delta_min = cfg["data"].get("val_asp_ratio_delta_min", 1.0/val_delta),
         asp_ratio_delta_max = cfg["data"].get("val_asp_ratio_delta_max", val_delta),      
         img_norm=cfg["data"].get("img_norm",True),
+        augmentations=val_augmentations,
+        frame_list = None
     )
 
-    n_classes = t_loader.n_classes
+    n_classes = v_loader.n_classes
 
     valloader = data.DataLoader(
         v_loader, batch_size=cfg["training"]["batch_size"], num_workers=cfg["training"]["n_workers"]
@@ -102,7 +167,7 @@ def train(cfg, writer, logger):
     model = get_model(cfg["model"], n_classes).to(device)
     
     if report_mem:
-        print("7.)Total free: %0.3f;After model loader setup: "+report_mem_both(device))
+        print("7.)After model loader setup: "+report_mem_both(device))
     
     for param in model.parameters():
         param.requires_grad = True
@@ -151,10 +216,48 @@ def train(cfg, writer, logger):
     i = start_iter
     flag = True
     max_iters = cfg["training"]["train_iters"]
+    boost_cnt = 0
     while i <= max_iters and flag:
         if 'reset_epoch' in cfg["training"]:
             scheduler.last_epoch = cfg["training"]['reset_epoch']
-        
+        train_frame_list = None
+        if len(boost_indices) > 0:
+            curr_boost_idx = boost_indices[boost_cnt % len(boost_indices)]
+            if curr_boost_idx < 0:
+                train_frame_list = None
+            else:
+                train_frame_list = hist_to_framenames(hist_train, idx_to_name_train, curr_boost_idx, boost_multipl, boost_add_ratio)
+            t_loader = data_loader(
+                data_path,
+                is_transform=True,
+                split=cfg["data"]["train_split"],
+                img_size=(cfg["data"].get("img_rows","same"), cfg["data"].get("img_cols", "same")),
+                version=cfg["data"].get("version","cityscapes"),
+                img_norm=cfg["data"].get("img_norm",True),
+                augmentations=data_aug,
+                frame_list=train_frame_list,
+                boost_idx = curr_boost_idx,
+                boost_retries = cfg["training"].get("boost_retries",1)
+            )
+            if curr_boost_idx < 0:
+                val_frame_list = None
+            else:
+                val_frame_list = hist_to_framenames(hist_val, idx_to_name_val, curr_boost_idx, 1, boost_add_ratio)
+            v_loader = data_loader(
+                data_path,
+                is_transform=True,
+                split=cfg["data"]["val_split"],
+                img_size=(cfg["model"].get("input_size",[cfg["data"].get("img_rows","same"), "same"])[0] , cfg["model"].get("input_size",["same",cfg["data"].get("img_cols", "same")])[1]),
+                version=cfg["data"].get("version","cityscapes"),
+                asp_ratio_delta_min = cfg["data"].get("val_asp_ratio_delta_min", 1.0/val_delta),
+                asp_ratio_delta_max = cfg["data"].get("val_asp_ratio_delta_max", val_delta),      
+                img_norm=cfg["data"].get("img_norm",True),
+                augmentations=val_augmentations,
+                boost_idx = curr_boost_idx,
+                boost_retries = val_retries,
+                frame_list = val_frame_list
+            )
+
         #reshuffle training set with each epoch
         trainloader = data.DataLoader(
            t_loader,
@@ -177,6 +280,8 @@ def train(cfg, writer, logger):
             i += 1
             
             start_ts = time.time()
+            #optimizer.zero_grad()
+            #optimizer.step()
             scheduler.step()
             model.train()
             images = images.to(device)
@@ -278,6 +383,7 @@ def train(cfg, writer, logger):
             
                 val_loss_meter.reset()
                 running_metrics_val.reset()
+                
 
                 if score["Mean IoU : \t"] >= best_iou:
                     best_iou = score["Mean IoU : \t"]

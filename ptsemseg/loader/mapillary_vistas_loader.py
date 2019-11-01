@@ -22,17 +22,24 @@ class mapillaryVistasLoader(data.Dataset):
         version='cityscapes',
         asp_ratio_delta_min = -1.0,
         asp_ratio_delta_max = -1.0,  
-        img_norm=True
+        img_norm=True,
+        offline_res = None,
+        frame_list = None,
+        boost_idx = -1,
+        boost_retries = 1
     ):
         self.root = root
         self.split = split
         self.is_transform = is_transform
         self.augmentations = augmentations
-        self.n_classes = 65      
+        self.n_classes = 65
+        self.offline_res = offline_res
         self.img_norm = img_norm
         self.asp_ratio_delta_min = asp_ratio_delta_min
         self.asp_ratio_delta_max = asp_ratio_delta_max 
-
+        self.boost_idx = boost_idx
+        self.boost_retries = boost_retries
+    
         self.img_size = img_size if isinstance(img_size, tuple) else (img_size, img_size)
         self.mean = np.array([80.5423, 91.3162, 81.4312])
         self.files = {}
@@ -40,7 +47,14 @@ class mapillaryVistasLoader(data.Dataset):
         self.images_base = os.path.join(self.root, self.split, "images")
         self.annotations_base = os.path.join(self.root, self.split, "labels")
 
-        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
+        if not frame_list is None:
+            frame_list_jpgs = []
+            for lbl_path in frame_list:
+                frm_path = os.path.join(self.images_base, os.path.basename(lbl_path).replace(".png", ".jpg"))
+                frame_list_jpgs.append(frm_path)
+            self.files[split] = frame_list_jpgs
+        else:
+            self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
 
         self.class_ids, self.class_names, self.class_colors = self.parse_config()
 
@@ -104,18 +118,40 @@ class mapillaryVistasLoader(data.Dataset):
         lbl_path = os.path.join(
             self.annotations_base, os.path.basename(img_path).replace(".jpg", ".png")
         )
-        
-        img = Image.open(img_path)
+        is_offline_res = not self.offline_res is None
+        if is_offline_res:
+            img = lbl_path
+        else:
+            img = Image.open(img_path)
         lbl = Image.open(lbl_path)
-        #print("INFO sz0", img_path, img.size, lbl.size, self.img_size)
-        if self.augmentations is not None:
-            img, lbl = self.augmentations(img, lbl)
+        #print("INFO sz0", lbl_path, img, lbl.size, self.img_size, self.lut , is_offline_res)
+        if not is_offline_res and self.augmentations is not None:
+            if self.boost_idx >= 0:
+                img1, lbl1, max_pxl = None, None, -1
+                for i in range(self.boost_retries):
+                    img0, lbl0 = self.augmentations(img, lbl)
+                    bcnt = np.bincount(np.asarray(lbl0).ravel())[self.boost_idx]
+                    if bcnt > max_pxl:
+                        img1, lbl1 = img0, lbl0
+                img, lbl = img1, lbl1
+            else:
+                img, lbl = self.augmentations(img, lbl)
+            
 
-        if self.is_transform:
+        if not is_offline_res and self.is_transform:
             img, lbl = self.transform(img, lbl)
         if not self.lut is None:
             lbl = torch.from_numpy(np.take(self.lut, lbl)).long()
-        #print("INFO sz1", self.is_transform, img_path, img.size, lbl.size, self.img_size)
+        elif is_offline_res:
+            if self.offline_res == "hist":
+                bcnt = np.bincount(np.asarray(lbl).ravel())
+                min_len = min(self.n_classes+1,len(bcnt))
+                lbl = np.zeros(self.n_classes+1, dtype=np.int64)
+                lbl[0:min_len] = bcnt[0:min_len]
+            else:
+                lbl = torch.from_numpy(np.asarray(lbl)).long()
+       
+        #print("INFO sz1", self.is_transform, img_path, img, lbl.size, self.img_size)
         return img, lbl
 
     def transform(self, img, lbl):

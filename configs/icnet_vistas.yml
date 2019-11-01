@@ -10,18 +10,26 @@ data:
     path: /workspace/data/mapillary/
     root: /workspace/data/mapillary/
     val_asp_ratio_delta: 1.5
+validation:
+    boost_retries: 8
+    augmentations:
+        rcrop: [1080, 1920]
 training:
-    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou20p3.pkl
+    boost_indices: [0,1,40,53,-1,56,58,59,60,-1,42,41,36,37,-1,38,31,40,32,-1,33,34,26,22,9]
+    boost_multipl: 3
+    boost_add_ratio: 3.0
+    boost_retries: 8
+    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou23p0.pkl
     train_iters: 9999000
     batch_size: 5
     n_workers: 10
-    val_interval: 14000
-    print_interval: 14000
+    val_interval: 4400
+    print_interval: 4400
     optimizer:
         name: adam
-        lr: 1.0e-4
+        lr: 0.5e-4
         weight_decay: 0.0001
-    l_rate: 0.0001
+    l_rate: 0.00005
     augmentations:
         rsize: [1920, 7680]
         rcrop: [1080, 1920]

@@ -542,15 +542,32 @@ class pyramidPooling(nn.Module):
     def forward(self, x):
         h, w = x.shape[2:]
 
-        if self.training or len(self.model_name) < 5 or self.model_name[:5] != "icnet":  # general settings or pspnet
-            k_sizes = []
-            strides = []
+        
+        k_sizes = []
+        strides = []
+        #FullHD: [(5, 10), (11, 20), (17, 30), (34, 60)] [(5, 10), (11, 20), (17, 30), (34, 60)]
+        #self.training or
+        # replicate strange k_size/stride offsets found in pretrained icnet networks
+        # general settings or pspnet
+        is_icnet = len(self.model_name) >= 5 and self.model_name[:5] == "icnet" and x.shape[2] == 33 and x.shape[3] == 65
+        if is_icnet:
+            add_icnet_str = [(3,5),(3,5),(1,1)]
+            for idx, pool_size in enumerate(self.pool_sizes):
+                ksz = (min(int(h / pool_size)-1,x.shape[2]), min(int(w / pool_size)-1,x.shape[3]))
+                strides.append(ksz)
+                if idx < len(add_icnet_str):
+                    k_sizes.append((ksz[0]+add_icnet_str[idx][0],ksz[1]+add_icnet_str[idx][1]))
+                else:
+                    k_sizes.append(ksz)
+        else:
             for pool_size in self.pool_sizes:
-                k_sizes.append((int(h / pool_size), int(w / pool_size)))
-                strides.append((int(h / pool_size), int(w / pool_size)))
-        else:  # eval mode and icnet: pre-trained for 1025 x 2049
-            k_sizes = [(8, 15), (13, 25), (17, min(33, x.shape[2])), (33, min(65, x.shape[3]))]
-            strides = [(5, 10), (10, 20), (16, min(32, x.shape[2])), (33, min(65, x.shape[3]))]
+                ksz = (min(int(h / pool_size),x.shape[2]), min(int(w / pool_size),x.shape[3]))
+                k_sizes.append(ksz)
+                strides.append(ksz)
+        #print("EVAL!! sz, h, w", self.pool_sizes, h, w, k_sizes, strides)
+        #else:  # eval mode and icnet: pre-trained for 1025 x 2049
+        #    k_sizes = [(8, 15), (13, 25), (17, min(33, x.shape[2])), (33, min(65, x.shape[3]))]
+        #    strides = [(5, 10), (10, 20), (16, min(32, x.shape[2])), (33, min(65, x.shape[3]))]
 
         if self.fusion_mode == "cat":  # pspnet: concat (including x)
             output_slices = [x]
