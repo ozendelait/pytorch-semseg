@@ -46,15 +46,18 @@ class mapillaryVistasLoader(data.Dataset):
 
         self.images_base = os.path.join(self.root, self.split, "images")
         self.annotations_base = os.path.join(self.root, self.split, "labels")
+        self.boost_idx_per_frm = {}
 
         if not frame_list is None:
             frame_list_jpgs = []
-            for lbl_path in frame_list:
+            for (lbl_path, boost_idx) in frame_list:
                 frm_path = os.path.join(self.images_base, os.path.basename(lbl_path).replace(".png", ".jpg"))
                 frame_list_jpgs.append(frm_path)
+                self.boost_idx_per_frm[frm_path] = boost_idx
             self.files[split] = frame_list_jpgs
         else:
             self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
+        
 
         self.class_ids, self.class_names, self.class_colors = self.parse_config()
 
@@ -126,13 +129,19 @@ class mapillaryVistasLoader(data.Dataset):
         lbl = Image.open(lbl_path)
         #print("INFO sz0", lbl_path, img, lbl.size, self.img_size, self.lut , is_offline_res)
         if not is_offline_res and self.augmentations is not None:
-            if self.boost_idx >= 0:
+            boost_idx = self.boost_idx_per_frm.get(img_path,self.boost_idx)
+            if boost_idx >= 0:
                 img1, lbl1, max_pxl = None, None, -1
                 for i in range(self.boost_retries):
                     img0, lbl0 = self.augmentations(img, lbl)
-                    bcnt = np.bincount(np.asarray(lbl0).ravel())[self.boost_idx]
+                    bcnt0 = np.bincount(np.asarray(lbl0).ravel())
+                    if bcnt0.shape[0] <= boost_idx:
+                        bcnt = 0
+                    else:
+                        bcnt = bcnt0[boost_idx]
                     if bcnt > max_pxl:
                         img1, lbl1 = img0, lbl0
+                        max_pxl = bcnt
                 img, lbl = img1, lbl1
             else:
                 img, lbl = self.augmentations(img, lbl)

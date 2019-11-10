@@ -63,25 +63,32 @@ def calc_histogram(cfg, split_name):
         hist_all[i_val,0:label_hist_np.shape[1]] = label_hist_np[0,:]
     return hist_all, idx_to_name
 
-def hist_to_framenames(hist_all, idx_to_name, boost_idx, boost_multipl, boost_add_ratio):
-    ids_val0 = list(np.nonzero(hist_all[:,boost_idx])[0])
-    ids_val = ids_val0[:]
-    if boost_multipl > 1: #repeat frames which need boosting, can introduce serious amount of overfitting
-        for _ in range(1,int(boost_multipl)):
-            ids_val += ids_val0[:]
-    num_add = int(float(len(ids_val)) * boost_add_ratio+0.5)
-    if num_add > 0:
-        ids_containing = set(ids_val)
+def hist_to_framenames(hist_all, idx_to_name, boost_idx, boost_max_ratio):
+    if not isinstance(boost_idx, list):
+        boost_idx = [boost_idx]
+    ids_val = []
+    ids_covered = {}
+    for idx0 in boost_idx:
+        if idx0 < 0:
+            continue
+        ids_val0 = list(np.nonzero(hist_all[:,idx0])[0])
+        #print("Adding frames for %i (max new num: %i, old num: %i)" % (idx0, len(ids_val0), len(ids_val)))
+        for add0 in ids_val0:
+            first_id = ids_covered.get(add0,idx0)
+            ids_val.append((add0, first_id))
+            ids_covered[add0] = first_id
+    num_total = int(float(len(hist_all)) * boost_max_ratio+0.5)
+    if num_total > len(ids_val):
+        ids_containing = set(ids_covered.keys())
         ids_remainder = list(set(range(hist_all.shape[0]))-ids_containing)
-        if len(ids_remainder) > num_add:
+        num_add = min(num_total - len(ids_val), len(ids_remainder))
+        if num_add > 0:
             add_ids = np.random.choice(len(ids_remainder), num_add)
             for id0 in add_ids:
-                ids_val.append(ids_remainder[id0])
-        else:
-            ids_val += ids_remainder
+                ids_val.append((ids_remainder[id0],-1))
     all_frames = []
-    for id0 in ids_val:
-        all_frames.append(idx_to_name[id0][0])
+    for id0, bidx0 in ids_val:
+        all_frames.append((idx_to_name[id0][0],bidx0))
     return all_frames
 
 def train(cfg, writer, logger):
@@ -108,8 +115,7 @@ def train(cfg, writer, logger):
     boost_indices = cfg["training"].get("boost_indices", -1)
     if not isinstance(boost_indices, list):
         boost_indices = [boost_indices]
-    boost_multipl = cfg["training"].get("boost_multipl", -1)
-    boost_add_ratio = cfg["training"].get("boost_add_ratio", -1)
+    boost_max_ratio = cfg["training"].get("boost_max_ratio", -1)
     val_frame_list = None
     if len(boost_indices) > 0:
         hist_val, idx_to_name_val = calc_histogram(cfg, cfg["data"]["val_split"])
@@ -156,10 +162,7 @@ def train(cfg, writer, logger):
     )
 
     n_classes = v_loader.n_classes
-
-    valloader = data.DataLoader(
-        v_loader, batch_size=cfg["training"]["batch_size"], num_workers=cfg["training"]["n_workers"]
-    )    
+    
     # Setup Metrics
     running_metrics_val = runningScore(n_classes)
 
@@ -223,10 +226,14 @@ def train(cfg, writer, logger):
         train_frame_list = None
         if len(boost_indices) > 0:
             curr_boost_idx = boost_indices[boost_cnt % len(boost_indices)]
-            if curr_boost_idx < 0:
+            boost_cnt += 1
+            if not isinstance(curr_boost_idx, list):
+                curr_boost_idx = [curr_boost_idx]
+            if curr_boost_idx[0] < 0:
                 train_frame_list = None
             else:
-                train_frame_list = hist_to_framenames(hist_train, idx_to_name_train, curr_boost_idx, boost_multipl, boost_add_ratio)
+                logger.info(" Trying boosting for indices "+str(curr_boost_idx))
+                train_frame_list = hist_to_framenames(hist_train, idx_to_name_train, curr_boost_idx, boost_max_ratio)
             t_loader = data_loader(
                 data_path,
                 is_transform=True,
@@ -236,13 +243,12 @@ def train(cfg, writer, logger):
                 img_norm=cfg["data"].get("img_norm",True),
                 augmentations=data_aug,
                 frame_list=train_frame_list,
-                boost_idx = curr_boost_idx,
                 boost_retries = cfg["training"].get("boost_retries",1)
             )
-            if curr_boost_idx < 0:
+            if curr_boost_idx[0] < 0:
                 val_frame_list = None
             else:
-                val_frame_list = hist_to_framenames(hist_val, idx_to_name_val, curr_boost_idx, 1, boost_add_ratio)
+                val_frame_list = hist_to_framenames(hist_val, idx_to_name_val, curr_boost_idx, boost_max_ratio)
             v_loader = data_loader(
                 data_path,
                 is_transform=True,
@@ -253,7 +259,6 @@ def train(cfg, writer, logger):
                 asp_ratio_delta_max = cfg["data"].get("val_asp_ratio_delta_max", val_delta),      
                 img_norm=cfg["data"].get("img_norm",True),
                 augmentations=val_augmentations,
-                boost_idx = curr_boost_idx,
                 boost_retries = val_retries,
                 frame_list = val_frame_list
             )
@@ -323,6 +328,7 @@ def train(cfg, writer, logger):
             #if i > i_start + 2:
                 model.eval()
                 with torch.no_grad():
+                    valloader = data.DataLoader( v_loader, batch_size=cfg["training"]["batch_size"], num_workers=cfg["training"]["n_workers"] )
                     for i_val, (images_val, labels_val) in tqdm(enumerate(valloader), desc = "Validation"):
                         if i_val < 1 and report_mem:
                             print("24)Before val device copy: "+report_mem_both(device))
@@ -384,9 +390,12 @@ def train(cfg, writer, logger):
                 val_loss_meter.reset()
                 running_metrics_val.reset()
                 
-
-                if score["Mean IoU : \t"] >= best_iou:
+                is_best_iou = score["Mean IoU : \t"] >= best_iou
+                name_postfix = "_last_epoche"
+                if is_best_iou:
                     best_iou = score["Mean IoU : \t"]
+                    name_postfix = "_best_model"
+                if is_best_iou or len(boost_indices) > 0:
                     state = {
                         "epoch": i + 1,
                         "model_state": model.state_dict(),
@@ -396,7 +405,7 @@ def train(cfg, writer, logger):
                     }
                     save_path = os.path.join(
                         writer.file_writer.get_logdir(),
-                        "{}_{}_best_model.pkl".format(cfg["model"]["arch"], cfg["data"]["dataset"]),
+                        "{}_{}{}.pkl".format(cfg["model"]["arch"], cfg["data"]["dataset"],name_postfix),
                     )
                     torch.save(state, save_path)
                 break

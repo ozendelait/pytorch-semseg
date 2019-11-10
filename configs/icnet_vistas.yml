@@ -15,21 +15,20 @@ validation:
     augmentations:
         rcrop: [1080, 1920]
 training:
-    boost_indices: [0,1,40,53,-1,56,58,59,60,-1,42,41,36,37,-1,38,31,40,32,-1,33,34,26,22,9]
-    boost_multipl: 3
-    boost_add_ratio: 3.0
+    boost_indices: [[56, 56, 56, 56, 56, 56, 56, 56, 1, 1, 1, 1, 18, 56, 56, 56, 56, 56, 0, 22, 56, 8, 9, 10, 1, 53], [60, 62, 43, 32, 56, 1, 18, 22, 26, 60, 43, 42, 32, 22, 56, 34, 1, 18, 53], [56, 56, 56, 56, 56, 1, 1, 26, 26,  42, 42, 22, 22, 40, 60, 53, 18, 0, 56, 56, 56, 56, 56, 1, 1, 26, 26,  42, 42, 22, 22, 40, 60, 0, 58, 53], [37, 38, 8, 53, 56, 1, 18, 22, 26, 43, 37, 37, 38, 8, 56, 1, 18], [56, 56, 56, 56, 56, 1, 1, 26, 26, 42, 42, 22, 22, 40, 60, 18, 0,56, 56, 56, 56, 56, 1, 1, 26, 26, 42, 42, 22, 22, 40, 60, 18, 0], -1]
+    boost_max_ratio: 0.9
     boost_retries: 8
-    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou23p0.pkl
+    resume: /workspace/data/bestmodel/icnetNonBN_vis_iou24p0.pkl
     train_iters: 9999000
     batch_size: 5
     n_workers: 10
-    val_interval: 4400
-    print_interval: 4400
+    val_interval: 4500
+    print_interval: 4500
     optimizer:
         name: adam
-        lr: 0.5e-4
+        lr: 0.125e-4
         weight_decay: 0.0001
-    l_rate: 0.00005
+    l_rate: 0.0000125
     augmentations:
         rsize: [1920, 7680]
         rcrop: [1080, 1920]
