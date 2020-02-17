@@ -19,10 +19,16 @@ def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
 mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
-        "railsem19": [0.0, 0.0, 0.0]}
+        "railsem19": [0.0, 0.0, 0.0],
+        "vistas": [80.5423, 91.3162, 81.4312]}
 
 def prepare_img(img0, orig_size, img_mean, img_norm):
-    img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
+    if img0.shape[0] < orig_size[0] and img0.shape[1] < orig_size[1]: #apply padding, keep image in center
+        w_add_both = orig_size[1]-img0.shape[1]
+        h_add_both = orig_size[0]-img0.shape[0]
+        img = np.pad(img0,pad_width=[(h_add_both//2,h_add_both-h_add_both//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
+    else:
+        img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
     img = img.astype(np.float64)
     img -= img_mean
@@ -46,10 +52,11 @@ def test(args):
     print("Read Input Image from : {}".format(args.img_path))
 
     if args.inp_dim == None:
-       img = misc.imread(allfiles[0])
-       orig_size = img.shape[:-1]
+        img = misc.imread(allfiles[0])
+        orig_size = img.shape[:-1]
     else:
-       orig_size = [int(dim) for dim in args.inp_dim.split("x")]
+        orig_size = [int(dim) for dim in args.inp_dim.split("x")]
+        orig_size = [orig_size[1],orig_size[0]]
 
     print(orig_size)
     data_loader = get_loader(args.dataset)

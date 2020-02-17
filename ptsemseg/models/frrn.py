@@ -25,8 +25,8 @@ class frrn(nn.Module):
     1) Original Author's code: https://github.com/TobyPDE/FRRN
     2) TF implementation by @kiwonjoon: https://github.com/hiwonjoon/tf-frrn
     """
-
-    def __init__(self, n_classes=21, model_type="B", group_norm=False, n_groups=16):
+#ignore input_size for now
+    def __init__(self, n_classes=21, model_type="B", group_norm=False, n_groups=16, input_size=None):
         super(frrn, self).__init__()
         self.n_classes = n_classes
         self.model_type = model_type
@@ -137,7 +137,9 @@ class frrn(nn.Module):
             # pass through encoding FRRUs
             for block in range(n_blocks):
                 key = "_".join(map(str, ["encoding_frru", n_blocks, channels, scale, block]))
+                #print("Dec-Incoming FRRU Size: ", y_pooled, y.shape, z.shape)
                 y, z = getattr(self, key)(y_pooled, z)
+                #print("Dec-Outgoing FRRU Size: ",  y.shape, z.shape)
             prev_channels = channels
 
         # decoding
@@ -148,9 +150,9 @@ class frrn(nn.Module):
             # pass through decoding FRRUs
             for block in range(n_blocks):
                 key = "_".join(map(str, ["decoding_frru", n_blocks, channels, scale, block]))
-                # print("Incoming FRRU Size: ", key, y_upsampled.shape, z.shape)
+                #print("Incoming FRRU Size: ", key, upsample_size, y_upsampled.shape, z.shape)
                 y, z = getattr(self, key)(y_upsampled, z)
-                # print("Outgoing FRRU Size: ", key, y.shape, z.shape)
+                #print("Outgoing FRRU Size: ", key, y.shape, z.shape)
             prev_channels = channels
 
         # merge streams

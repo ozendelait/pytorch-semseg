@@ -44,22 +44,27 @@ class mapillaryVistasLoader(data.Dataset):
         self.mean = np.array([80.5423, 91.3162, 81.4312])
         self.files = {}
 
-        self.images_base = os.path.join(self.root, self.split, "images")
-        self.annotations_base = os.path.join(self.root, self.split, "labels")
         self.boost_idx_per_frm = {}
-
-        if not frame_list is None:
-            frame_list_jpgs = []
-            for (lbl_path, boost_idx) in frame_list:
-                frm_path = os.path.join(self.images_base, os.path.basename(lbl_path).replace(".png", ".jpg"))
-                frame_list_jpgs.append(frm_path)
-                self.boost_idx_per_frm[frm_path] = boost_idx
-            self.files[split] = frame_list_jpgs
+        if test_mode:
+            pass # dont load any files via fileloader
         else:
-            self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
+            self.images_base = os.path.join(self.root, self.split, "images")
+            self.annotations_base = os.path.join(self.root, self.split, "labels")
+            if not frame_list is None:
+                frame_list_jpgs = []
+                for (lbl_path, boost_idx) in frame_list:
+                    frm_path = os.path.join(self.images_base, os.path.basename(lbl_path).replace(".png", ".jpg"))
+                    frame_list_jpgs.append(frm_path)
+                    self.boost_idx_per_frm[frm_path] = boost_idx
+                self.files[split] = frame_list_jpgs
+            else:
+                self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
         
 
-        self.class_ids, self.class_names, self.class_colors = self.parse_config()
+            self.class_ids, self.class_names, self.class_colors = self.parse_config()
+            if not self.files[split]:
+                raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
+            print("Found %d %s images" % (len(self.files[split]), split))
 
         self.ignore_id = 250
         self.first_run = True
@@ -87,10 +92,6 @@ class mapillaryVistasLoader(data.Dataset):
         250, 250, 250, 250, 250, 250, 250, 250, 250]
             self.lut = np.array(map_to_cs).astype(np.uint8)
             self.n_classes = 19
-        if not self.files[split]:
-            raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
-
-        print("Found %d %s images" % (len(self.files[split]), split))
 
     def parse_config(self):
         with open(os.path.join(self.root, "config.json")) as config_file:

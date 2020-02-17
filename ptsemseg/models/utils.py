@@ -395,14 +395,17 @@ class FRRU(nn.Module):
         self.conv_res = nn.Conv2d(out_channels, 32, kernel_size=1, stride=1, padding=0)
 
     def forward(self, y, z):
+       # print("SIZES0: ", y.shape, z.shape)
         x = torch.cat([y, nn.MaxPool2d(self.scale, self.scale)(z)], dim=1)
         y_prime = self.conv1(x)
+        #print("SIZES1: ", x.shape, y_prime.shape)
         y_prime = self.conv2(y_prime)
-
         x = self.conv_res(y_prime)
-        upsample_size = torch.Size([_s * self.scale for _s in y_prime.shape[-2:]])
-        x = F.interpolate(x, size=upsample_size, mode="nearest", align_corners=False)
-        z_prime = z + x
+        #print("SIZES2: ", x.shape, y_prime.shape)
+        upsample_size = [_s * self.scale for _s in y_prime.shape[-2:]]
+        x = F.interpolate(x, size=upsample_size, mode="nearest", align_corners=None)
+        #print("SIZES3: ", upsample_size, z.shape, x.shape)
+        z_prime = z[:,:,:x.shape[2],:x.shape[3]] + x
 
         return y_prime, z_prime
 
