@@ -46,7 +46,7 @@ class railsem19Loader(data.Dataset):
     mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
-	"railsem19": [0.0, 0.0, 0.0],
+        "railsem19": [0.0, 0.0, 0.0],
         "offline_res": [-1.0],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
@@ -115,7 +115,7 @@ class railsem19Loader(data.Dataset):
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not self.files[split]:
+        if split != "test" and not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
         print("Found %d %s images" % (len(self.files[split]), split))
@@ -206,9 +206,9 @@ class railsem19Loader(data.Dataset):
             b[temp == l] = self.label_colours[l][2]
 
         rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
-        rgb[:, :, 0] = r / 255.0
-        rgb[:, :, 1] = g / 255.0
-        rgb[:, :, 2] = b / 255.0
+        rgb[:, :, 0] = r #/ 255.0
+        rgb[:, :, 1] = g #/ 255.0
+        rgb[:, :, 2] = b #/ 255.0
         return rgb
 
     def encode_segmap(self, mask):

@@ -1,13 +1,13 @@
 import os
 import torch
 from tqdm import tqdm_notebook as tqdm
-import argparse, glob
+import argparse, glob, imageio
 import numpy as np
-import scipy.misc as misc
 from PIL import Image as pilimg
 from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.utils import convert_state_dict
+from skimage import transform as sktransf
 
 def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
     files = []
@@ -22,13 +22,22 @@ mean_rgb = {
         "railsem19": [0.0, 0.0, 0.0],
         "vistas": [80.5423, 91.3162, 81.4312]}
 
+n_classes_fixed = {
+        "cityscapes_fixed": 19,
+        "railsem19_fixed": 19,
+        "vistas_fixed": 65
+            }
+
 def prepare_img(img0, orig_size, img_mean, img_norm):
-    if img0.shape[0] < orig_size[0] and img0.shape[1] < orig_size[1]: #apply padding, keep image in center
+    if img0.shape[0] == orig_size[0] and img0.shape[1] == orig_size[1]:
+        img = img0
+    elif img0.shape[0] <= orig_size[0] and img0.shape[1] <= orig_size[1]: #apply padding, keep image in center
         w_add_both = orig_size[1]-img0.shape[1]
         h_add_both = orig_size[0]-img0.shape[0]
         img = np.pad(img0,pad_width=[(h_add_both//2,h_add_both-h_add_both//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
-        img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
+        img = sktransf.resize(img0, orig_size, order=1) # uint8 with RGB mode
+        #img = np.array(pilimg.fromarray(img0).resize((orig_size[1],orig_size[0]), pilimg.BILINEAR)) # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
     img = img.astype(np.float64)
     img -= img_mean
@@ -52,18 +61,22 @@ def test(args):
     print("Read Input Image from : {}".format(args.img_path))
 
     if args.inp_dim == None:
-        img = misc.imread(allfiles[0])
+        img = pilimg.open(allfiles[0])
         orig_size = img.shape[:-1]
     else:
         orig_size = [int(dim) for dim in args.inp_dim.split("x")]
         orig_size = [orig_size[1],orig_size[0]]
 
     print(orig_size)
-    data_loader = get_loader(args.dataset)
+    loader = None
     img_mean = mean_rgb[args.version]
-    loader = data_loader(root=None, is_transform=True, version=args.version, img_size=orig_size, img_norm=args.img_norm, test_mode=True)
-    
-    n_classes = loader.n_classes
+    if args.dataset in n_classes_fixed:
+        n_classes = n_classes_fixed[args.dataset]
+    else:
+        data_loader = get_loader(args.dataset)
+        loader = data_loader(root=None, is_transform=True, version=args.version, split="test", img_size=orig_size, img_norm=args.img_norm, test_mode=True)
+
+        n_classes = loader.n_classes
   
     # Setup Model
     model_dict = {"arch": model_name, "input_size":tuple(orig_size)}
@@ -86,7 +99,8 @@ def test(args):
             outname = os.path.join(os.path.dirname(outdir), os.path.basename(f).replace('.jpg','.png'))
         if os.path.exists(outname):
             continue
-        img =misc.imread(f)
+        #img = np.array(pilimg.open(f))
+        img = imageio.imread(f)
         img = prepare_img(img, orig_size, img_mean, args.img_norm)# prepare_img(img, orig_size, model_name, loader, args.img_norm)
         with torch.no_grad():
             img = torch.from_numpy(img).float()
@@ -96,12 +110,15 @@ def test(args):
             if model_name[:min(5,len(model_name))] in ["pspne", "icnet"]:
                 pred = pred.astype(np.float32)
                 # float32 with F mode, resize back to orig_size
-                pred = misc.imresize(pred, orig_size, "nearest", mode="F")
+                pred = sktransf.resize(pred, orig_size, order=0)
+                #pred = np.array(pilimg.fromarray(pred).resize((orig_size[1],orig_size[0]), pilimg.NEAREST))
         
-        #print(pred.shape)
-        #decoded = loader.decode_segmap(pred)
         missings = sorted(list(all_lab-set(np.unique(pred))))
-        pilimg.fromarray(np.uint8(pred)).save(outname)
+        imageio.imwrite(outname,np.uint8(pred))
+        #pilimg.fromarray(np.uint8(pred)).save(outname)
+        if not loader is None:
+            #pilimg.fromarray(np.uint8(loader.decode_segmap(pred))).save(outname+".vis.jpg")
+            imageio.imwrite(outname+".vis.jpg",np.uint8(loader.decode_segmap(pred)))
         if len(allfiles) < 4:
             print("Segmentation Pred. Saved at: {}; missing classes:".format(outname), missings)
 
@@ -171,7 +188,7 @@ def main_test(arg0):
     )
     parser.add_argument(
         "--out_path", nargs="?", type=str, default=None, help="Path of the output segmap"
-    )
+    )    
     args = parser.parse_args(arg0)
     test(args)
     return 0
