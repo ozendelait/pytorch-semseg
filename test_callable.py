@@ -1,13 +1,13 @@
 import os
 import torch
 from tqdm import tqdm_notebook as tqdm
-import argparse, glob, imageio
+import argparse, glob
 import numpy as np
 from PIL import Image as pilimg
 from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.utils import convert_state_dict
-from skimage import transform as sktransf
+import scipy.misc as misc
 
 def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
     files = []
@@ -36,7 +36,7 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
         h_add_both = orig_size[0]-img0.shape[0]
         img = np.pad(img0,pad_width=[(h_add_both//2,h_add_both-h_add_both//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
-        img = sktransf.resize(img0, orig_size, order=1) # uint8 with RGB mode
+        img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
         #img = np.array(pilimg.fromarray(img0).resize((orig_size[1],orig_size[0]), pilimg.BILINEAR)) # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
     img = img.astype(np.float64)
@@ -100,7 +100,8 @@ def test(args):
         if os.path.exists(outname):
             continue
         #img = np.array(pilimg.open(f))
-        img = imageio.imread(f)
+        #img = imageio.imread(f)
+        img = misc.imread(f) #this is considerably faster than imageio!
         img = prepare_img(img, orig_size, img_mean, args.img_norm)# prepare_img(img, orig_size, model_name, loader, args.img_norm)
         with torch.no_grad():
             img = torch.from_numpy(img).float()
@@ -110,15 +111,16 @@ def test(args):
             if model_name[:min(5,len(model_name))] in ["pspne", "icnet"]:
                 pred = pred.astype(np.float32)
                 # float32 with F mode, resize back to orig_size
-                pred = sktransf.resize(pred, orig_size, order=0)
+                #pred = sktransf.resize(pred, orig_size, order=0)
+                pred = misc.imresize(pred, orig_size, "nearest", mode="F")
                 #pred = np.array(pilimg.fromarray(pred).resize((orig_size[1],orig_size[0]), pilimg.NEAREST))
         
         missings = sorted(list(all_lab-set(np.unique(pred))))
-        imageio.imwrite(outname,np.uint8(pred))
-        #pilimg.fromarray(np.uint8(pred)).save(outname)
+        #imageio.imwrite(outname,np.uint8(pred))
+        pilimg.fromarray(np.uint8(pred)).save(outname)
         if not loader is None:
-            #pilimg.fromarray(np.uint8(loader.decode_segmap(pred))).save(outname+".vis.jpg")
-            imageio.imwrite(outname+".vis.jpg",np.uint8(loader.decode_segmap(pred)))
+            pilimg.fromarray(np.uint8(loader.decode_segmap(pred))).save(outname+".vis.jpg")
+            #imageio.imwrite(outname+".vis.jpg",np.uint8(loader.decode_segmap(pred)))
         if len(allfiles) < 4:
             print("Segmentation Pred. Saved at: {}; missing classes:".format(outname), missings)
 
