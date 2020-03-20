@@ -38,6 +38,20 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
     img = np.expand_dims(img, 0)
     return img
 
+def decode_segmap(temp, colors):
+    r = temp.copy()
+    g = temp.copy()
+    b = temp.copy()
+    for l in range(len(colors)):
+        r[temp == l] = colors[l][0]
+        g[temp == l] = colors[l][1]
+        b[temp == l] = colors[l][2]
+    rgb = np.zeros((temp.shape[0], temp.shape[1], 3), dtype=np.uint8)
+    rgb[:, :, 0] = r
+    rgb[:, :, 1] = g
+    rgb[:, :, 2] = b
+    return rgb
+
 def test(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -62,6 +76,12 @@ def test(args):
     data_loader = get_loader(args.dataset)
     img_mean = mean_rgb[args.version]
     loader = data_loader(root=None, is_transform=True, version=args.version, img_size=orig_size, img_norm=args.img_norm, test_mode=True)
+    
+    colors = []
+    if len(args.vis_dataset) > 0:
+        data_loader_vis = get_loader(args.vis_dataset)
+        loader_vis = data_loader_vis(root=None, is_transform=True, version=args.version, img_size=orig_size, img_norm=args.img_norm, test_mode=True)
+        colors = loader_vis.colors
     
     n_classes = loader.n_classes
   
@@ -101,7 +121,11 @@ def test(args):
         #print(pred.shape)
         #decoded = loader.decode_segmap(pred)
         missings = sorted(list(all_lab-set(np.unique(pred))))
-        pilimg.fromarray(np.uint8(pred)).save(outname)
+        pred = np.uint8(pred)
+        if len(colors) > 0:
+            pred = decode_segmap(pred, colors)
+                         
+        pilimg.fromarray(pred).save(outname)
         if len(allfiles) < 4:
             print("Segmentation Pred. Saved at: {}; missing classes:".format(outname), missings)
 
@@ -120,6 +144,13 @@ def main_test(arg0):
         type=str,
         default="pascal",
         help="Dataset to use ['pascal, camvid, ade20k etc']",
+    )
+    parser.add_argument(
+        "--vis_dataset",
+        nargs="?",
+        type=str,
+        default="",
+        help="False-colour rgb mapping to use for results (cityscapes or railsem19; empty will return original label ids in uint8)",
     )
     parser.add_argument(
         "--inp_dim",

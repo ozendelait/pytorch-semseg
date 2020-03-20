@@ -138,7 +138,7 @@ class cityscapesLoader(data.Dataset):
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not self.files[split]:
+        if not test_mode and not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
         print("Found %d %s images" % (len(self.files[split]), split))

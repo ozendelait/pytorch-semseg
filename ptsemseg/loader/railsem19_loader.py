@@ -35,10 +35,10 @@ class railsem19Loader(data.Dataset):
         [230, 150, 140],
         [0, 0, 142],
         [0, 0, 70],
-        [220, 20, 60],
+        [90, 40, 40],
         [0, 80, 100],
-        [0, 206, 209],
-        [0, 70, 90]
+        [0, 254, 254],
+        [0, 68, 63]
     ]
 
     label_colours = dict(zip(range(19), colors))
@@ -46,7 +46,7 @@ class railsem19Loader(data.Dataset):
     mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
-	"railsem19": [0.0, 0.0, 0.0],
+        "railsem19": [0.0, 0.0, 0.0],
         "offline_res": [-1.0],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
@@ -115,7 +115,7 @@ class railsem19Loader(data.Dataset):
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not self.files[split]:
+        if not test_mode and not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
         print("Found %d %s images" % (len(self.files[split]), split))
