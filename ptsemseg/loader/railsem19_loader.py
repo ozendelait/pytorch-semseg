@@ -47,6 +47,7 @@ class railsem19Loader(data.Dataset):
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
         "railsem19": [0.0, 0.0, 0.0],
+        "vistas": [80.5423, 91.3162, 81.4312],
         "offline_res": [-1.0],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
@@ -87,7 +88,8 @@ class railsem19Loader(data.Dataset):
         self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
         if len(self.files[split]) == 0:
             self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".jpg")
-        print("INFO FOUND IMGS", split, len(self.files[split]), self.images_base, img_size)
+        if not test_mode:
+            print("INFO FOUND IMGS", split, len(self.files[split]), self.images_base, img_size)
         self.void_classes = [19,20,253,254,255]
         self.valid_classes = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
         self.class_names = [
@@ -115,10 +117,10 @@ class railsem19Loader(data.Dataset):
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not test_mode and not self.files[split]:
-            raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
-
-        print("Found %d %s images" % (len(self.files[split]), split))
+        if not test_mode:
+            if not self.files[split]:
+                raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
+            print("Found %d %s images" % (len(self.files[split]), split))
 
     def __len__(self):
         """__len__"""

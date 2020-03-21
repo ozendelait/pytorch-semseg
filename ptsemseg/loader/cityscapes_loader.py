@@ -48,6 +48,8 @@ class cityscapesLoader(data.Dataset):
     mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
+        "railsem19": [0.0, 0.0, 0.0],
+        "vistas" : [80.5423, 91.3162, 81.4312],
     }  # pascal mean for PSPNet and ICNet pre-trained model
 
     def __init__(
@@ -138,10 +140,10 @@ class cityscapesLoader(data.Dataset):
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not test_mode and not self.files[split]:
-            raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
-
-        print("Found %d %s images" % (len(self.files[split]), split))
+        if not test_mode:
+            if not self.files[split]:
+                raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
+            print("Found %d %s images" % (len(self.files[split]), split))
 
     def __len__(self):
         """__len__"""

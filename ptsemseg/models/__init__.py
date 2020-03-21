@@ -11,12 +11,12 @@ from ptsemseg.models.frrn import frrn
 
 
 def get_model(model_dict, n_classes, version=None):
-    name = model_dict["arch"]
+    name = model_dict["arch"].lower()
     model = _get_model_instance(name)
     param_dict = copy.deepcopy(model_dict)
     param_dict.pop("arch")
 
-    if name in ["frrnA", "frrnB"]:
+    if name in ["frrna", "frrnb"]:
         model = model(n_classes, **param_dict)
 
     elif name in ["fcn32s", "fcn16s", "fcn8s"]:
@@ -38,10 +38,10 @@ def get_model(model_dict, n_classes, version=None):
     elif name == "icnet":
         model = model(n_classes=n_classes, **param_dict)
     
-    elif name == "icnetNonBN":
+    elif name == "icnetnonbn":
         model = model(n_classes=n_classes, is_batchnorm=False, **param_dict)
 
-    elif name == "icnetBN":
+    elif name == "icnetbn":
         model = model(n_classes=n_classes, **param_dict)
 
     else:
@@ -60,11 +60,11 @@ def _get_model_instance(name):
             "segnet": segnet,
             "pspnet": pspnet,
             "icnet": icnet,
-            "icnetBN": icnet,
-            "icnetNonBN": icnet,
+            "icnetbn": icnet,
+            "icnetnonbn": icnet,
             "linknet": linknet,
-            "frrnA": frrn,
-            "frrnB": frrn,
-        }[name]
+            "frrna": frrn,
+            "frrnb": frrn,
+        }[name.lower()]
     except:
         raise ("Model {} not available".format(name))
