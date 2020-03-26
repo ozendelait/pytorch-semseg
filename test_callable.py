@@ -9,12 +9,49 @@ from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.utils import convert_state_dict
 
+
+import os, sys, re, fnmatch
+def walk_maxd(root, maxdepth):
+    dirs, nondirs = [], []
+    for name in os.listdir(root):
+        (dirs if os.path.isdir(os.path.join(root, name)) else nondirs).append(name)
+    yield root, dirs, nondirs
+    if maxdepth > 1:
+        for name in dirs:
+            for x in walk(os.path.join(root, name), maxdepth-1):
+                yield x
+                
+def glob_dirs_ic(root, pattern= ['*.jpg','*.png','*.jpeg'], maxdepth = 1):
+    reg_expr = re.compile('|'.join(fnmatch.translate(p) for p in pattern), re.IGNORECASE)
+    result = []
+    for root, dirs, files in walk_maxd(root=root, maxdepth=maxdepth):
+        result += [os.path.join(root, j) for j in files if re.match(reg_expr, j)]
+    return result
+
 def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
     files = []
     for p in pattern:
         for dir,_,_ in os.walk(start_dir):
             files.extend(glob.glob(os.path.join(dir,p)))
     return files
+
+class ImagesPathsOrigDimFromFolder(torch.utils.data.Dataset):
+    def __init__(self, csv_file, root_dir, transform=None, pattern = ["*.png","*.jpg","*.jpeg"], maxdepth = 1):
+        self.root_dir = root_dir
+        self.folder_files = glob_dirs_ic(root_dir, pattern=pattern, maxdepth=maxdepth)
+        self.transform = transform
+    def __len__(self):
+        return len(self.folder_files)
+    def __getitem__(self, idx): 
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        img_path = os.path.join(self.root_dir,
+                                self.folder_files[idx])
+        img = io.imread(img_path)
+        orig_dim = img.shape
+        if self.transform:
+            img = self.transform(img)
+        return image, img_path, orig_dim
 
 mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
@@ -30,13 +67,9 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
         h_add_both = orig_size[0]-img0.shape[0]
         h_add_both0 = h_add_both 
         if h_add_both < 0: #this removes up to 8 lines at the bottom so that 1024/1025 height models can work for 1032 height inputs without scaling
-            print("old_dims:",img0.shape)
             img0 = img0[:h_add_both,:,:]
-            print("new_dims0:",img0.shape)
             h_add_both0 = 0
         img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
-        if h_add_both < 0:
-            print("new_dims1:",img.shape)
     else:
         img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
