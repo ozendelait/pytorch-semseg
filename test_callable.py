@@ -25,10 +25,18 @@ mean_rgb = {
 def prepare_img(img0, orig_size, img_mean, img_norm):
     w_add_both = 0
     h_add_both = 0
-    if img0.shape[0] < orig_size[0] and img0.shape[1] < orig_size[1]: #apply padding, keep image in center
+    if img0.shape[0] - 9 < orig_size[0] and img0.shape[1] < orig_size[1]: #apply padding, keep image in center
         w_add_both = orig_size[1]-img0.shape[1]
         h_add_both = orig_size[0]-img0.shape[0]
-        img = np.pad(img0,pad_width=[(h_add_both//2,h_add_both-h_add_both//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
+        h_add_both0 = h_add_both 
+        if h_add_both < 0: #this removes up to 8 lines at the bottom so that 1024/1025 height models can work for 1032 height inputs without scaling
+            print("old_dims:",img0.shape)
+            img0 = img0[:h_add_both,:,:]
+            print("new_dims0:",img0.shape)
+            h_add_both0 = 0
+        img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
+        if h_add_both < 0:
+            print("new_dims1:",img.shape)
     else:
         img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
@@ -106,7 +114,7 @@ def test(args):
     model.load_state_dict(state)
     model.eval()
     model.to(device)
-    all_lab = set(range(19))
+    all_lab = set(range(n_classes))
     outdir = args.out_path
     outp_is_dir = max(outdir.find('.jpg'), outdir.find('.png')) < 0
     
@@ -139,10 +147,14 @@ def test(args):
             if calc_pred_quality:
                 pred_qual = np.squeeze(outputs.data.max(1)[0].cpu().numpy(), axis=0)
             pred = np.squeeze(outputs.data.max(1)[1].cpu().numpy(), axis=0)
+            
             if w_add_both > 0:
                 pred = pred[:,w_add_both//2:-(w_add_both//2)]
             if h_add_both > 0:
                 pred = pred[h_add_both//2:-(h_add_both//2),:]
+            if h_add_both < 0:
+                add_invalids = np.ones((-h_add_both,pred.shape[1]), dtype = pred.dtype)*255
+                pred = np.vstack((pred,add_invalids))
             if model_name_shrt in ["pspne", "icnet", "frrnb"]:
                 pred = pred.astype(np.float32)
                 if calc_pred_quality:
@@ -151,8 +163,6 @@ def test(args):
                 pred = misc.imresize(pred, restore_dim, "nearest", mode="F")
                 # no scaling for pred_qual necessary (this is for statistical comparisions)
         
-        #print(pred.shape)
-        #decoded = loader.decode_segmap(pred)
         missings = sorted(list(all_lab-set(np.unique(pred))))
         pred = np.uint8(pred)
         if calc_pred_quality:
@@ -271,7 +281,7 @@ def main_test(arg0):
                 class_distr, conf, hist = test(args)
                 q_score = class_distr[0]*class_distr[1]
                 if len(args.vis_dataset) > 0:
-                    print("Checked %s (n. %i):" %( args.version, args.img_norm), q_score, class_distr, conf, hist)
+                    print("Checked %s (n. %i):" %( args.version, args.img_norm), q_score, class_distr, conf)
                 if q_score > best_score:
                     best_score = q_score
                     best_params = (best_score, args.version, args.img_norm, class_distr, conf)
