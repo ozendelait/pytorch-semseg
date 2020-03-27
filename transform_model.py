@@ -10,7 +10,9 @@ mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
         "railsem19": [0.0, 0.0, 0.0],
-        "vistas": [80.5423, 91.3162, 81.4312]}
+        "vistas": [80.5423, 91.3162, 81.4312],
+        "pascal_bgr": [123.68, 116.779, 103.939],
+        "vistas_bgr": [81.4312, 91.3162, 80.5423]}
 
 def transform_layer(m0_state, key0, normalization_factor = 1.0, norm_mean = [0.0,0.0,0.0], apply_bgr_flip = True):
     orig_device =  m0_state[key0].get_device()
@@ -148,7 +150,9 @@ def convert(args):
     norm_mean = [0.0,0.0,0.0]
     versions = [mean_rgb[v.strip()] for v in args.change_version.split(';')]
     if len(versions) == 2:
-        norm_mean = [versions[0][c] - versions[1][c] for c in range(3)]
+        norm_mean = [versions[1][c] - versions[0][c] for c in range(3)]
+    if args.flip_rgb:
+        norm_mean = norm_mean[::-1]
     normalization_factor = 1.0
     if not args.img_norm is None:
         if args.img_norm:
@@ -170,7 +174,7 @@ def convert(args):
         #use template model file to identify differences resp. batch norm nodes
         m_trg_templ = torch.load(args.target_template)
         m_trg_templ_state = m_trg_templ["model_state"]
-        
+            
         to_bn, from_bn = find_diffs_bn(m0_state, m_trg_templ_state)
 
         remove_nodes = []
@@ -200,8 +204,9 @@ def convert(args):
         if len(append_nodes) > 0:
             kk = list(append_nodes.keys())
             print("Warning: Could not append %i nodes." % len(append_nodes), kk[0])
+            
+        m0["model_state"] = m1_state
         m0_state = m1_state
-        m0["model_state"] = m0_state
         
     print("Model transformer applies these changes: normalization_shift, normalization_factor, flip_rgb", norm_mean, normalization_factor, args.flip_rgb)
     print("to these input layers: ", inp_layers)
@@ -212,7 +217,7 @@ def convert(args):
         if not l in m0_state:
             print("Warning: skipping unknown key "+l)
             continue
-        transform_layer(m0_state, l, normalization_factor = normalization_factor, norm_mean = norm_mean)
+        transform_layer(m0_state, l, normalization_factor = normalization_factor, norm_mean = norm_mean, apply_bgr_flip = args.flip_rgb)
     torch.save(m0, trg_path)
     
 def main_convert(arg0):
@@ -248,7 +253,7 @@ def main_convert(arg0):
     )
     parser.add_argument(
         "--flip_rgb",
-        dest="no_img_norm",
+        dest="flip_rgb",
         action="store_true",
         help="Flip input channels (rgb<->bgr)",
     )
