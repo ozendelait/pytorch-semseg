@@ -404,9 +404,10 @@ class FRRU(nn.Module):
         #print("SIZES2: ", x.shape, y_prime.shape)
         upsample_size = [_s * self.scale for _s in y_prime.shape[-2:]]
         x = F.interpolate(x, size=upsample_size, mode="nearest", align_corners=None)
-        #print("SIZES3: ", upsample_size, z.shape, x.shape)
-        z_prime = z[:,:,:x.shape[2],:x.shape[3]] + x
-
+        #print("SIZES3: ", x.shape, z.shape, upsample_size, self.scale)
+        #z_prime = torch.narrow(torch.narrow(z, 2, 0, x.size()[2]), 3, 0, x.size()[3]) + x
+        z_prime = z + x
+        #print("SIZES1: ", z_prime.shape)
         return y_prime, z_prime
 
 

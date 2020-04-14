@@ -10,6 +10,7 @@ from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.utils import convert_state_dict
 from tqdm import tqdm_notebook as tqdm
+from export_onnx import torch_uint8_to_float, torch_uint8_to_float_normed, torch_downsample_to_size, torch_gaussian_blur
 
 import os, sys, re, fnmatch
 def walk_maxd(root, maxdepth):
@@ -36,24 +37,6 @@ def files_in_subdirs(start_dir, pattern = ["*.png","*.jpg","*.jpeg"]):
             files.extend(glob.glob(os.path.join(dir,p)))
     return files
 
-class ImagesPathsOrigDimFromFolder(torch.utils.data.Dataset):
-    def __init__(self, csv_file, root_dir, transform=None, pattern = ["*.png","*.jpg","*.jpeg"], maxdepth = 1):
-        self.root_dir = root_dir
-        self.folder_files = glob_dirs_ic(root_dir, pattern=pattern, maxdepth=maxdepth)
-        self.transform = transform
-    def __len__(self):
-        return len(self.folder_files)
-    def __getitem__(self, idx): 
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        img_path = os.path.join(self.root_dir,
-                                self.folder_files[idx])
-        img = io.imread(img_path)
-        orig_dim = img.shape
-        if self.transform:
-            img = self.transform(img)
-        return image, img_path, orig_dim
-
 mean_rgb = {
         "pascal": [103.939, 116.779, 123.68],
         "cityscapes": [0.0, 0.0, 0.0],
@@ -72,14 +55,15 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
             h_add_both0 = 0
         img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
-        img = cv2.resize(img0, (orig_size[1],orig_size[0]))  # uint8 with RGB mode
+        img = np.array(pilimg.fromarray(img0).resize(orig_size, pilimg.BILINEAR))
+        #img = cv2.resize(img0, (orig_size[1],orig_size[0]),0,0,cv2.INTER_LINEAR)  # uint8 with RGB mode
     # RGB -> BGR is done at opencv while loading images/videos automatically
-    img = img.astype(np.float64)
-    img -= img_mean
-    if img_norm:
-        img = img.astype(float) / 255.0
-    img = img.transpose(2, 0, 1)
-    img = np.expand_dims(img, 0)
+    #img = img.astype(np.float64)
+    #img -= img_mean
+    #if img_norm:
+    #    img = img.astype(float) / 255.0
+    #img = img.transpose(2, 0, 1)
+    #img = np.expand_dims(img, 0)
     return img, w_add_both, h_add_both
 
 def decode_segmap(temp, colors):
@@ -127,7 +111,10 @@ def test(args):
             print("Cannot open video " + args.inp_path)
             return -3
     else:
-        all_frames = files_in_subdirs(args.inp_path, pattern = ["*.png","*.jpg","*.jpeg"])
+        if '.png' in args.inp_path or '.jpg' in args.inp_path:
+            all_frames = [args.inp_path]
+        else:
+            all_frames = files_in_subdirs(args.inp_path, pattern = ["*.png","*.jpg","*.jpeg"])
         if len(all_frames) == 0:
             print("Found no images in directory " + args.inp_path)
             return -4
@@ -175,6 +162,13 @@ def test(args):
     model.load_state_dict(state)
     model.eval()
     model.to(device)
+    if args.img_norm:
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(), model)
+    else:
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(), model)
+    model_fromuint8.eval()
+    model_fromuint8.to(device)
+    
     all_lab = set(range(n_classes))
     outp_path = args.out_path
     outp_is_dir = max(outp_path.find('.mp4'), outp_path.find('.divx')) < 0
@@ -191,11 +185,15 @@ def test(args):
             break
         if not src_is_vid:
             restore_dim = (im0.shape[1],im0.shape[0])
-        img, w_add_both, h_add_both = prepare_img(im0, orig_size, img_mean, args.img_norm)
+        if orig_size[0] != restore_dim[1] or orig_size[1] != restore_dim[0]:
+            img, w_add_both, h_add_both = prepare_img(im0, orig_size, img_mean, args.img_norm)
+        else:
+            img, w_add_both, h_add_both = im0, 0, 0
         with torch.no_grad():
-            img = torch.from_numpy(img).float()   
+            img = torch.from_numpy(img)#.float()#.to(device)
             images = img.to(device)
-            outputs = model(images)
+            #outputs = model(images)
+            outputs = model_fromuint8(images)
             pred = np.squeeze(outputs.data.max(1)[1].cpu().numpy(), axis=0)
             
             if w_add_both > 0:
@@ -205,8 +203,6 @@ def test(args):
             if h_add_both < 0:
                 add_invalids = np.ones((-h_add_both,pred.shape[1]), dtype = pred.dtype)*255
                 pred = np.vstack((pred,add_invalids))
-            #if model_name_shrt in ["pspne", "icnet", "frrnb"]:
-            #    pred = pred.astype(np.float32)
             #resize back to restore_dim
             pred = np.uint8(pred)
             pred = cv2.resize(pred, restore_dim, interpolation=cv2.INTER_NEAREST)
@@ -232,7 +228,8 @@ def test(args):
                 im0 = cv2.imread(all_frames[access_idx])
     if src_is_vid:
         cap_out.release()
-        vcap.release()   
+        vcap.release()
+    return images, pred
             
 
 def main_test(arg0):
@@ -293,8 +290,7 @@ def main_test(arg0):
     )
     
     args = parser.parse_args(arg0)
-    test(args)
-    return 0
+    return test(args)
 
 if __name__ == "__main__":
     sys.exit(main_test(sys.argv[1:]))

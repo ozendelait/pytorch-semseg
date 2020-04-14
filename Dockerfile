@@ -1,13 +1,22 @@
 # adding pretrained-models.pytorch support and testing capabilities
 FROM pytorch/pytorch:1.4-cuda10.1-cudnn7-devel
 #install additional dependencies
-RUN apt-get update && apt-get install -y wget
-RUN conda install -y matplotlib scipy pandas jupyter "pylint<2.0.0" rope && conda clean --all && pip install tensorboardX
-#necessary for scipy legacy imread function
-RUN /usr/bin/yes | pip uninstall scipy
-RUN /usr/bin/yes | pip install scipy==1.1.0
-RUN /usr/bin/yes | pip install tensorboard
-RUN apt-get update && apt-get install -y graphviz
+RUN apt-get update && apt-get install -y wget graphviz
+RUN conda install -y -c conda-forge protobuf numpy && \
+    conda install -y matplotlib scipy pandas jupyter "pylint<2.0.0" rope ffmpeg opencv py-opencv && \
+    conda clean --all && \
+    pip install tensorboard onnx onnxruntime pydot
+
+#RUN dpkg -i nv-tensorrt-repo-ubuntu1x04-cudax.x-trt5.x.x.x-ga-yyyymmdd_1–1_amd64.deb
+#RUN apt-key add /var/nv-tensorrt-repo-cudax.x-trt5.x.x.x-ga-yyyymmdd/7fa2af80.pub
+#RUN apt-get update
+#RUN apt-get install tensorrt 
+#RUN apt-get install uff-converter-tf
+
+#RUN mkdir /workspace/tmp/ && cd /workspace/tmp/ && \
+#    git clone https://github.com/NVIDIA-AI-IOT/torch2trt && \
+#    cd /workspace/tmp/torch2trt && \
+#    python setup.py install
 
 #switch to non-root user with sudo privileges
 RUN apt-get update && apt-get install sudo && \

@@ -90,7 +90,6 @@ class frrn(nn.Module):
             prev_channels = channels
 
         # decoding
-        self.decoding_frrus = {}
         for n_blocks, channels, scale in self.decoder_frru_specs:
             # pass through decoding FRRUs
             for block in range(n_blocks):
@@ -153,7 +152,6 @@ class frrn(nn.Module):
                 #print("Incoming FRRU Size: ", key, upsample_size, y_upsampled.shape, z.shape)
                 y, z = getattr(self, key)(y_upsampled, z)
                 #print("Outgoing FRRU Size: ", key, y.shape, z.shape)
-            prev_channels = channels
 
         # merge streams
         xUp = F.interpolate(y, size=torch.Size([z.shape[2],z.shape[3]]), mode="bilinear", align_corners=True)
