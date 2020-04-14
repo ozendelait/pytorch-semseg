@@ -71,7 +71,8 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
             h_add_both0 = 0
         img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
-        img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
+        img = np.array(pilimg.fromarray(img0).resize(orig_size, pilimg.BILINEAR))
+        #img = misc.imresize(img0, orig_size)  # uint8 with RGB mode
     img = img[:, :, ::-1]  # RGB -> BGR
     img = img.astype(np.float64)
     img -= img_mean
@@ -169,8 +170,9 @@ def test(args):
             outname = os.path.join(os.path.dirname(outdir), outfile0)
         if not calc_pred_quality and os.path.exists(outname):
             continue
-        img =misc.imread(f)
-        restore_dim = img.shape[:-1]
+        i0 = pilimg.open(f)
+        img = np.array(i0) #misc.imread(f)
+        restore_dim = (img.shape[1],img.shape[0])
         img, w_add_both, h_add_both = prepare_img(img, orig_size, img_mean, args.img_norm)
         with torch.no_grad():
             img = torch.from_numpy(img).float()
@@ -193,7 +195,7 @@ def test(args):
                 if calc_pred_quality:
                     pred_qual = pred_qual.astype(np.float32)
                 # float32 with F mode, resize back to restore_dim
-                pred = misc.imresize(pred, restore_dim, "nearest", mode="F")
+                pred = np.array(pilimg.fromarray(pred).resize(restore_dim, pilimg.NEAREST))# misc.imresize(pred, restore_dim, "nearest", mode="F")
                 # no scaling for pred_qual necessary (this is for statistical comparisions)
         
         missings = sorted(list(all_lab-set(np.unique(pred))))
@@ -222,7 +224,8 @@ def test(args):
         if len(n0) > 2:
             diff_of_diffs = np.sum(n0[1:-1]-n0[0:-2])
         return (np.mean(all_hists), diff_of_diffs), (float(np.mean(all_qual,axis=0)), float(np.std(all_qual,axis=0))), all_hists
-        
+    else:
+        return images,pred
 
 def main_test(arg0):
     parser = argparse.ArgumentParser(description="Params")
@@ -320,7 +323,7 @@ def main_test(arg0):
                     best_params = (best_score, args.version, args.img_norm, class_distr, conf)
         print("Best version:", best_params)   
     else:
-        test(args)
+        return test(args)
     return 0
 
 if __name__ == "__main__":
