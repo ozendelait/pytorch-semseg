@@ -126,7 +126,7 @@ def main_export_onnx(arg0):
     dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.uint8).to(device)
     
     with torch.no_grad():
-        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=['input_bgr_img'], opset_version=args.opset, verbose=False)
+        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=['input_bgr_img'], opset_version=args.opset, verbose=False, keep_initializers_as_inputs=True)
     
     return 0
 
