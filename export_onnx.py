@@ -98,8 +98,10 @@ def main_export_onnx(arg0):
     parser.add_argument(
         "--inp_dim", nargs="?", type=str, default="1920x1080", help="Fixed input/output dimensions as WxH; default: 1920x1080")
     parser.add_argument(
-        "--img_norm", dest="img_norm", action="store_true", help="Source model expectesn scaling from [0;1] (target ONNX [0;255])",
-    )
+        "--img_norm", dest="img_norm", action="store_true", help="Source model expectesn scaling from [0;1] (target ONNX [0;255])")
+    parser.add_argument(
+        "--opset", nargs="?", type=int, default=11, help="Define onnx opset version")
+    
     parser.set_defaults(img_norm=False)
     args = parser.parse_args(arg0)
 
@@ -124,7 +126,7 @@ def main_export_onnx(arg0):
     dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.uint8).to(device)
     
     with torch.no_grad():
-        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=['input_bgr_img'], opset_version=11, verbose=False)
+        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=['input_bgr_img'], opset_version=args.opset, verbose=False)
     
     return 0
 
