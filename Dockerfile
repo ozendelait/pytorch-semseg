@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y wget graphviz
 RUN conda install -y -c conda-forge protobuf numpy && \
     conda install -y matplotlib scipy pandas jupyter "pylint<2.0.0" rope ffmpeg opencv py-opencv && \
     conda clean --all && \
-    pip install tensorboard onnx onnxruntime pydot
+    pip install tensorboard onnx onnxruntime-gpu pydot
 
 #RUN dpkg -i nv-tensorrt-repo-ubuntu1x04-cudax.x-trt5.x.x.x-ga-yyyymmdd_1–1_amd64.deb
 #RUN apt-key add /var/nv-tensorrt-repo-cudax.x-trt5.x.x.x-ga-yyyymmdd/7fa2af80.pub

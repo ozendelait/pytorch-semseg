@@ -10,7 +10,7 @@ from ptsemseg.models import get_model
 from ptsemseg.loader import get_loader
 from ptsemseg.utils import convert_state_dict
 from tqdm import tqdm_notebook as tqdm
-from export_onnx import torch_uint8_to_float, torch_uint8_to_float_normed, torch_downsample_to_size, torch_gaussian_blur
+from export_onnx import torch_uint8_to_float, torch_uint8_to_float_normed, torch_downsample_to_size, torch_gaussian_blur, torch_return_uint8_argmax
 
 import os, sys, re, fnmatch
 def walk_maxd(root, maxdepth):
@@ -55,15 +55,9 @@ def prepare_img(img0, orig_size, img_mean, img_norm):
             h_add_both0 = 0
         img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
-        img = np.array(pilimg.fromarray(img0).resize(orig_size, pilimg.BILINEAR))
-        #img = cv2.resize(img0, (orig_size[1],orig_size[0]),0,0,cv2.INTER_LINEAR)  # uint8 with RGB mode
-    # RGB -> BGR is done at opencv while loading images/videos automatically
-    #img = img.astype(np.float64)
-    #img -= img_mean
-    #if img_norm:
-    #    img = img.astype(float) / 255.0
-    #img = img.transpose(2, 0, 1)
-    #img = np.expand_dims(img, 0)
+        #this framework resizes using PIL to keep comparability with previous results; PIL resize is distinctively different from opencv; especially for downscaling (applies custom gauss filtering for anti-aliasing!)
+        img = np.array(pilimg.fromarray(img0).resize((orig_size[1],orig_size[0]), pilimg.BILINEAR)) # uint8 BGR
+        #img = cv2.resize(img0, (orig_size[1],orig_size[0]),0,0,cv2.INTER_LINEAR)  # uint8 BGR
     return img, w_add_both, h_add_both
 
 def decode_segmap(temp, colors):
@@ -163,9 +157,9 @@ def test(args):
     model.eval()
     model.to(device)
     if args.img_norm:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(), model)
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(), model, torch_return_uint8_argmax())
     else:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(), model)
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(), model, torch_return_uint8_argmax())
     model_fromuint8.eval()
     model_fromuint8.to(device)
     
@@ -190,11 +184,10 @@ def test(args):
         else:
             img, w_add_both, h_add_both = im0, 0, 0
         with torch.no_grad():
-            img = torch.from_numpy(img)#.float()#.to(device)
+            img = torch.from_numpy(img)
             images = img.to(device)
-            #outputs = model(images)
             outputs = model_fromuint8(images)
-            pred = np.squeeze(outputs.data.max(1)[1].cpu().numpy(), axis=0)
+            pred = outputs.cpu().numpy()
             
             if w_add_both > 0:
                 pred = pred[:,w_add_both//2:-(w_add_both//2)]
@@ -204,7 +197,6 @@ def test(args):
                 add_invalids = np.ones((-h_add_both,pred.shape[1]), dtype = pred.dtype)*255
                 pred = np.vstack((pred,add_invalids))
             #resize back to restore_dim
-            pred = np.uint8(pred)
             pred = cv2.resize(pred, restore_dim, interpolation=cv2.INTER_NEAREST)
             
         outext = '.png'

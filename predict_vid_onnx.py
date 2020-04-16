@@ -61,7 +61,7 @@ def prepare_img(img0, orig_size):
         img = np.pad(img0,pad_width=[(h_add_both0//2,h_add_both0-h_add_both0//2),(w_add_both//2,w_add_both-w_add_both//2),(0,0)],mode='constant', constant_values=0)
     else:
         #img = cv2.resize(img0, (orig_size[1],orig_size[0]))  # uint8 with RGB mode
-        img = np.array(pilimg.fromarray(img0).resize(orig_size, pilimg.BILINEAR))
+        img = np.array(pilimg.fromarray(img0).resize((orig_size[1],orig_size[0]), pilimg.BILINEAR))
     return img, w_add_both, h_add_both
 
 def test(args):
@@ -92,7 +92,6 @@ def test(args):
         
     restore_dim = (im0.shape[1],im0.shape[0])
     
-
 #sess.set_providers(['CPUExecutionProvider'])
     ort_session = onnxruntime.InferenceSession(args.model_path)
     orig_size = (ort_session.get_inputs()[0].shape[0],ort_session.get_inputs()[0].shape[1])
@@ -120,17 +119,15 @@ def test(args):
             break
         if not src_is_vid:
             restore_dim = (im0.shape[1],im0.shape[0])
-        w_add_both, h_add_both = 0, 0
+        
         if orig_size[0] != restore_dim[1] or orig_size[1] != restore_dim[0]:
             img, w_add_both, h_add_both = prepare_img(im0, orig_size)
         else:
-            img = im0
+            img, w_add_both, h_add_both = im0, 0, 0
         ort_inputs = {ort_session.get_inputs()[0].name: img}
         ort_outs = ort_session.run(None, ort_inputs)
-        outp_onnx_np = ort_outs[0][:,:,]
-        outp_onnx_np = np.argmax(outp_onnx_np, axis=1)#[0,:,:]
-        pred = np.squeeze(outp_onnx_np, axis=0)
-            
+        pred = ort_outs[0]
+
         if w_add_both > 0:
             pred = pred[:,w_add_both//2:-(w_add_both//2)]
         if h_add_both > 0:
@@ -138,8 +135,6 @@ def test(args):
         if h_add_both < 0:
             add_invalids = np.ones((-h_add_both,pred.shape[1]), dtype = pred.dtype)*255
             pred = np.vstack((pred,add_invalids))
-
-        pred = np.uint8(pred)
         pred = cv2.resize(pred, restore_dim, interpolation=cv2.INTER_NEAREST)
             
         outext = '.png'
@@ -192,7 +187,6 @@ def main_test(arg0):
     )
         
     parser.set_defaults(img_norm=True)
-
 
     parser.add_argument(
         "--inp_path", nargs="?", type=str, default=None, help="Path of the input video or directory"

@@ -16,7 +16,7 @@ mean_rgb = {
 
 def transform_layer(m0_state, key0, normalization_factor = 1.0, norm_mean = [0.0,0.0,0.0], apply_bgr_flip = True):
     orig_device =  m0_state[key0].get_device()
-    w0 = m0_state[key0].cpu().numpy()
+    w0 = m0_state[key0].cpu().numpy().astype(np.float64)
     if normalization_factor != 1.0:
         w0 = w0 * normalization_factor
     if apply_bgr_flip:
@@ -43,9 +43,9 @@ def transform_layer(m0_state, key0, normalization_factor = 1.0, norm_mean = [0.0
         if key0 == key0_b or key0_b not in m0_state:
             print("Warning: cannot detect type of input layer "+ key0)
         else:
-            w0_b = m0_state[key0_b].cpu().numpy()
-            m0_state[key0_b] = torch.tensor(w0_b - norm_fact, device = orig_device)            
-    m0_state[key0] = torch.tensor(w0, device = orig_device)
+            w0_b = m0_state[key0_b].cpu().numpy().astype(np.float64)
+            m0_state[key0_b] = torch.tensor((w0_b - norm_fact).astype(np.float32), device = orig_device)            
+    m0_state[key0] = torch.tensor(w0.astype(np.float32), device = orig_device)
     
 def find_diffs_bn(state0, stateTempl):
     to_bn = {}
@@ -90,26 +90,26 @@ def transform_from_bn(m0_state, key_from_bn):
         
     orig_device =  m0_state[k0].get_device()
     #bn: y = (x-running_mean)*gamma/sqrt(running_var+eps) + beta
-    w1_var = m0_state[key_from_bn+'.running_var'].cpu().numpy()
+    w1_var = m0_state[key_from_bn+'.running_var'].cpu().numpy().astype(np.float64)
     w1_var = 1.0/np.sqrt(w1_var+eps_bn)
     if key_from_bn+'.weight' in m0_state:
-        w1_var = w1_var * m0_state[key_from_bn+'.weight'].cpu().numpy()
+        w1_var = w1_var * m0_state[key_from_bn+'.weight'].cpu().numpy().astype(np.float64)
         
-    w0_bias = -m0_state[key_from_bn+'.running_mean'].cpu().numpy() * w1_var
+    w0_bias = -m0_state[key_from_bn+'.running_mean'].cpu().numpy().astype(np.float64) * w1_var
     if key_from_bn+'.bias' in m0_state:
-        w0_bias += m0_state[key_from_bn+'.bias'].cpu().numpy()
+        w0_bias += m0_state[key_from_bn+'.bias'].cpu().numpy().astype(np.float64)
     
-    w0 = m0_state[k0].cpu().numpy()
+    w0 = m0_state[k0].cpu().numpy().astype(np.float64)
     #apply batch norm weight accross output dim of previous node
     w0r = w0.reshape((w0.shape[0],-1))
     w0new = w0r*w1_var.reshape((w1_var.shape[0],1))
     w0new = w0new.reshape(w0.shape)
     
-    m0_state[k0] = torch.tensor(np.copy(w0new), device = orig_device)
+    m0_state[k0] = torch.tensor(np.copy(w0new).astype(np.float32), device = orig_device)
     remove_nodes = [key_from_bn+'.weight',key_from_bn+'.running_mean',
                     key_from_bn+'.running_var',key_from_bn+'.num_batches_tracked', key_from_bn+'.bias']
     append_nodes = {}
-    append_nodes[k0] = (k0bias, torch.tensor(np.copy(w0_bias), device = orig_device)) # this bias term is added after the weights term
+    append_nodes[k0] = (k0bias, torch.tensor(np.copy(w0_bias).astype(np.float32), device = orig_device)) # this bias term is added after the weights term
     return remove_nodes, append_nodes
 
 def transform_to_bn(m0_state, key_to_bn, ref_is_affine):
@@ -135,8 +135,8 @@ def transform_to_bn(m0_state, key_to_bn, ref_is_affine):
     else:
         k1bias = k0w # directly start with running_var
     if key_to_bn+'.bias' in m0_state:
-        b0 = m0_state[key_to_bn+'.bias'].cpu().numpy()
-        append_nodes[k1bias] = (k1runmean, torch.tensor(b0*-1.0, device = orig_device)) #use original bias running_mean; the other weights are set to identity
+        b0 = m0_state[key_to_bn+'.bias'].cpu().numpy().astype(np.float64)
+        append_nodes[k1bias] = (k1runmean, torch.tensor((b0*-1.0).astype(np.float32), device = orig_device)) #use original bias running_mean; the other weights are set to identity
     else:
         append_nodes[k1bias] = (k1runmean, torch.tensor(np.zeros((inp_dim,), dtype = np.float32), device = orig_device)) # this bias term is added after the weights term
     append_nodes[k1runmean] = (k1runvar, torch.tensor(np.ones((inp_dim,), dtype = np.float32) - eps_bn, device = orig_device)) # this bias term is added after the weights term

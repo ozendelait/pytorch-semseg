@@ -69,7 +69,15 @@ class torch_uint8_to_float_normed(torch.nn.Module):
         #based on https://gist.github.com/xvdp/149e8c7f532ffb58f29344e5d2a1bee0
                  #HWC -> CHW          uint8 -> float   normalize  CHW-> 1CHW
         return  (x.permute(2,0,1).to(dtype=torch.float) / 255.).unsqueeze(0).contiguous()
-        
+
+class torch_return_uint8_argmax(torch.nn.Module):
+    def __init__(self):
+        super(torch_return_uint8_argmax, self).__init__() 
+    def forward(self, x):
+        x0 = x.squeeze(0)
+        _, x1 = torch.max(x0, 0)
+        return x1.to(dtype=torch.uint8)
+
 def get_num_classes(state):
     # Setup Model
     potential_n_class = ['classif_conv.weight', 'classification.weight']
@@ -110,9 +118,9 @@ def main_export_onnx(arg0):
     model.load_state_dict(state)
     model.eval()
     if args.img_norm:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(),model).to(device)
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(),model,torch_return_uint8_argmax()).to(device)
     else:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(),model).to(device)
+        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(),model,torch_return_uint8_argmax()).to(device)
     dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.uint8).to(device)
     
     with torch.no_grad():
