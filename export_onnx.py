@@ -100,9 +100,11 @@ def main_export_onnx(arg0):
     parser.add_argument(
         "--img_norm", dest="img_norm", action="store_true", help="Source model expectesn scaling from [0;1] (target ONNX [0;255])")
     parser.add_argument(
+        "--skip_formating", dest="skip_formating", action="store_true", help="Skip pushing of HWC -> 1CHW & uint8->float conversion into onnx")
+    parser.add_argument(
         "--opset", nargs="?", type=int, default=11, help="Define onnx opset version")
     
-    parser.set_defaults(img_norm=False)
+    parser.set_defaults(img_norm=False, skip_formating=False)
     args = parser.parse_args(arg0)
 
     if len(args.out_path) == 0:
@@ -119,14 +121,22 @@ def main_export_onnx(arg0):
     model = get_model(model_dict, get_num_classes(state), version=None)
     model.load_state_dict(state)
     model.eval()
-    if args.img_norm:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(),model,torch_return_uint8_argmax()).to(device)
+    if args.skip_formating:
+        inp_layer_name  = 'input_bgr_1chw_floats'
+        outp_layer_name = 'output_pred_floats'
+        model_fromuint8 = torch.nn.Sequential(model).to(device)
+        dummy_input = torch.zeros((1, 3, orig_size[0], orig_size[1]), dtype = torch.float32).to(device)
     else:
-        model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(),model,torch_return_uint8_argmax()).to(device)
-    dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.uint8).to(device)
+        inp_layer_name  = 'input_bgr_hwc_uint8'
+        outp_layer_name = 'output_argmax_pred_uint8'
+        if args.img_norm:
+            model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float_normed(),model,torch_return_uint8_argmax()).to(device)
+        else:
+            model_fromuint8 = torch.nn.Sequential(torch_uint8_to_float(),model,torch_return_uint8_argmax()).to(device)
+        dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.uint8).to(device)
     
     with torch.no_grad():
-        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=['input_bgr_img'], opset_version=args.opset, verbose=False, keep_initializers_as_inputs=True)
+        torch.onnx.export(model_fromuint8, dummy_input, args.out_path, input_names=[inp_layer_name], output_names=[outp_layer_name], opset_version=args.opset, verbose=False, keep_initializers_as_inputs=True)
     
     return 0
 
