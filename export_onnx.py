@@ -70,6 +70,20 @@ class torch_uint8_to_float_normed(torch.nn.Module):
                  #HWC -> CHW          uint8 -> float   normalize  CHW-> 1CHW
         return  (x.permute(2,0,1).to(dtype=torch.float) / 255.).unsqueeze(0).contiguous()
 
+class torch_fakeint8_to_float(torch.nn.Module):
+    def __init__(self):
+        super(torch_fakeint8_to_float, self).__init__()
+    def forward(self, x):
+        #based on https://gist.github.com/xvdp/149e8c7f532ffb58f29344e5d2a1bee0
+               #HWC -> CHW          uint8 -> float
+        x0 = x.permute(2,0,1).to(dtype=torch.float)
+        #fix faked int8 input
+        mask_neg = torch.nn.ReLU()(-torch.sign(x0))
+        x0 += mask_neg*256.0
+        #x0[x0<0] += 256.0 # <- this is not supported by onnxruntime
+                #CHW-> 1CHW
+        return x0.unsqueeze(0).contiguous()
+    
 class torch_return_uint8_argmax(torch.nn.Module):
     def __init__(self):
         super(torch_return_uint8_argmax, self).__init__() 
@@ -77,6 +91,14 @@ class torch_return_uint8_argmax(torch.nn.Module):
         x0 = x.squeeze(0)
         _, x1 = torch.max(x0, 0)
         return x1.to(dtype=torch.uint8)
+    
+class torch_return_int8_argmax(torch.nn.Module):
+    def __init__(self):
+        super(torch_return_int8_argmax, self).__init__() 
+    def forward(self, x):
+        x0 = x.squeeze(0)
+        _, x1 = torch.max(x0, 0)
+        return x1.to(dtype=torch.int8)
 
 def get_num_classes(state):
     # Setup Model
@@ -102,6 +124,8 @@ def main_export_onnx(arg0):
     parser.add_argument(
         "--skip_formating", dest="skip_formating", action="store_true", help="Skip pushing of HWC -> 1CHW & uint8->float conversion into onnx")
     parser.add_argument(
+        "--fakeint8", dest="fakeint8", action="store_true", help="Expects fake int8 inputs (int8 view on uint8 data)")
+    parser.add_argument(
         "--opset", nargs="?", type=int, default=11, help="Define onnx opset version")
     
     parser.set_defaults(img_norm=False, skip_formating=False)
@@ -126,6 +150,11 @@ def main_export_onnx(arg0):
         outp_layer_name = 'output_pred_floats'
         model_fromuint8 = torch.nn.Sequential(model).to(device)
         dummy_input = torch.zeros((1, 3, orig_size[0], orig_size[1]), dtype = torch.float32).to(device)
+    elif args.fakeint8:
+        inp_layer_name  = 'input_bgr_hwc_int8'
+        outp_layer_name = 'output_argmax_pred_int8'
+        model_fromuint8 = torch.nn.Sequential(torch_fakeint8_to_float(),model,torch_return_int8_argmax()).to(device)
+        dummy_input = torch.zeros((orig_size[0], orig_size[1], 3), dtype = torch.int8).to(device)
     else:
         inp_layer_name  = 'input_bgr_hwc_uint8'
         outp_layer_name = 'output_argmax_pred_uint8'

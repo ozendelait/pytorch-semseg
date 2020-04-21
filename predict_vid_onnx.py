@@ -94,8 +94,10 @@ def test(args):
     
 #sess.set_providers(['CPUExecutionProvider'])
     ort_session = onnxruntime.InferenceSession(args.model_path)
-    orig_size = (ort_session.get_inputs()[0].shape[0],ort_session.get_inputs()[0].shape[1])
-
+    inp_needs_transforms = (len(ort_session.get_inputs()[0].shape) == 4)
+    inp_needs_fakeint8 = "_int8" in ort_session.get_inputs()[0].name
+    idx_h = 2 if inp_needs_transforms else 0
+    orig_size = (ort_session.get_inputs()[0].shape[idx_h],ort_session.get_inputs()[0].shape[idx_h+1])
     # Setup image
     print("Reading {} frames from input {}, model {}, model inp.sz, inp sz, providers:".format(str(max_frms), args.inp_path,args.model_path), orig_size, restore_dim, ort_session.get_providers())
    
@@ -124,9 +126,15 @@ def test(args):
             img, w_add_both, h_add_both = prepare_img(im0, orig_size)
         else:
             img, w_add_both, h_add_both = im0, 0, 0
+        if inp_needs_transforms:
+            img = np.expand_dims(img.astype(np.float32).transpose(2, 0, 1), 0)
+        elif inp_needs_fakeint8:
+            img = img.view(dtype=np.int8)
         ort_inputs = {ort_session.get_inputs()[0].name: img}
         ort_outs = ort_session.run(None, ort_inputs)
         pred = ort_outs[0]
+        if inp_needs_transforms:
+            pred = np.argmax(np.squeeze(pred, axis = 0), axis = 0).astype(np.uint8)
 
         if w_add_both > 0:
             pred = pred[:,w_add_both//2:-(w_add_both//2)]
