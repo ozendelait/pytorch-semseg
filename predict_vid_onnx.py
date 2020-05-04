@@ -99,7 +99,7 @@ def test(args):
     idx_h = 2 if inp_needs_transforms else 0
     orig_size = (ort_session.get_inputs()[0].shape[idx_h],ort_session.get_inputs()[0].shape[idx_h+1])
     # Setup image
-    print("Reading {} frames from input {}, model {}, model inp.sz, inp sz, providers:".format(str(max_frms), args.inp_path,args.model_path), orig_size, restore_dim, ort_session.get_providers())
+    print("Reading {} frames from input {}, model {}, model inp.sz hw, inp sz wh, providers:".format(str(max_frms), args.inp_path,args.model_path), orig_size, restore_dim, ort_session.get_providers())
    
     colors = []
     blend_frm = args.vis_dataset.split(';')[-1].lower().find('blend') >= 0
@@ -110,11 +110,11 @@ def test(args):
     outp_is_dir = max(outp_path.find('.mp4'), outp_path.find('.divx')) < 0
     
     if src_is_vid and outp_is_dir:
-        outp_path += '/vis_'+args.inp_path+'.mp4'
+        outp_path += '/vis_'+os.path.basename(args.inp_path).replace('.mp4','')+'.mp4'
     if not os.path.exists(os.path.dirname(outp_path)):
         os.makedirs(os.path.dirname(outp_path))
     if src_is_vid:
-        cap_out = cv2.VideoWriter(outp_path,cv2.VideoWriter_fourcc(*'MP4V'), fps // args.decimate, (restore_dim[1],restore_dim[0]))
+        cap_out = cv2.VideoWriter(outp_path,cv2.VideoWriter_fourcc(*'mp4v'), float(fps / args.decimate), (restore_dim[0],restore_dim[1]))
     access_idx = 0
     for f in tqdm(range(max_frms), "Calculating predictions..."):
         if im0 is None:
@@ -153,7 +153,8 @@ def test(args):
                 pred = cv2.addWeighted(im0, 0.5, pred, 0.5, 0.0)
         
         if src_is_vid:
-            cap_out.write(pred)
+            if not pred is None:
+                cap_out.write(pred)
             im0, access_idx = get_video_frame(vcap, skip_idx=(args.decimate-1))
         else:
             outfile0 = os.path.basename(all_frames[access_idx]).replace('.jpg','').replace('.png','')

@@ -2,11 +2,14 @@
 FROM pytorch/pytorch:1.4-cuda10.1-cudnn7-devel
 #install additional dependencies
 RUN apt-get update && apt-get install -y wget graphviz
-RUN conda install -y -c conda-forge protobuf numpy && \
-    conda install -y matplotlib scipy pandas jupyter "pylint<2.0.0" rope ffmpeg opencv py-opencv && \
+RUN conda install -y -c conda-forge -c sbugallo protobuf numpy matplotlib scipy pandas jupyter "pylint<2.0.0" rope && \
     conda clean --all && \
     pip install tensorboard onnx onnx-simplifier && \
-    pip install onnxruntime-gpu pydot 
+    pip install onnxruntime-gpu pydot && \
+    conda install -y -c conda-forge -c sbugallo ffmpeg py-opencv==4.2.0 && \
+    conda clean --all
+
+RUN apt-get update && apt-get install -y libgl1-mesa-glx
 
 #RUN dpkg -i nv-tensorrt-repo-ubuntu1x04-cudax.x-trt5.x.x.x-ga-yyyymmdd_1–1_amd64.deb
 #RUN apt-key add /var/nv-tensorrt-repo-cudax.x-trt5.x.x.x-ga-yyyymmdd/7fa2af80.pub

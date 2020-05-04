@@ -78,8 +78,7 @@ class torch_fakeint8_to_float(torch.nn.Module):
                #HWC -> CHW          uint8 -> float
         x0 = x.permute(2,0,1).to(dtype=torch.float)
         #fix faked int8 input
-        mask_neg = torch.nn.ReLU()(-torch.sign(x0))
-        x0 += mask_neg*256.0
+        x0 += torch.clamp(x0,-1,0)*-256.0
         #x0[x0<0] += 256.0 # <- this is not supported by onnxruntime
                 #CHW-> 1CHW
         return x0.unsqueeze(0).contiguous()
@@ -148,7 +147,8 @@ def main_export_onnx(arg0):
     if args.skip_formating:
         inp_layer_name  = 'input_bgr_1chw_floats'
         outp_layer_name = 'output_pred_floats'
-        model_fromuint8 = torch.nn.Sequential(model).to(device)
+        model_fromuint8 = torch.nn.Sequential(model,torch_return_int8_argmax()).to(device)
+        #torch.nn.Sequential(model).to(device)
         dummy_input = torch.zeros((1, 3, orig_size[0], orig_size[1]), dtype = torch.float32).to(device)
     elif args.fakeint8:
         inp_layer_name  = 'input_bgr_hwc_int8'
